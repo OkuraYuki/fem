@@ -23,7 +23,8 @@ struct BoundaryCondition {
     int type;           // 0: Dirichlet (固定電位)
                         // 1: 全領域固定
                         // 4: 標準固定値
-    double value;       // 電位値 φ
+                        // 5: Neumann (自由端、電位勾配ゼロ)
+    double value;       // 電位値 φ (Dirichlet用) または勾配値 (Neumann用)
 };
 
 class ElectrostaticAnalyzer {
@@ -71,4 +72,6 @@ public:
     // ユーティリティ
     int get_num_nodes() { return nodes.size(); }
     int get_num_elements() { return elements.size(); }
+    void identify_boundary_nodes();  // 境界節点を特定
+    std::vector<bool> is_boundary_node;  // 境界節点フラグ
 };

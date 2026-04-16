@@ -53,14 +53,16 @@ void ElectrostaticAnalyzer::read_mesh(const char *filename)
     fscanf(fp, "%d %d %d %d %lf", &num_nodes, &num_elements,
            &dummy1, &dummy2, &unit);
 
-    // 要素情報
+    // 要素情報（1-based → 0-based）
     elements.resize(num_elements);
     for (int i = 0; i < num_elements; i++) {
-        fscanf(fp, "%d %d %d %d",
-               &elements[i].nodes[0],
-               &elements[i].nodes[1],
-               &elements[i].nodes[2],
-               &elements[i].nodes[3]);
+        int n0, n1, n2, n3;
+        fscanf(fp, "%d %d %d %d", &n0, &n1, &n2, &n3);
+        elements[i].nodes[0] = n0 - 1;
+        elements[i].nodes[1] = n1 - 1;
+        elements[i].nodes[2] = n2 - 1;
+        elements[i].nodes[3] = n3 - 1;
+        elements[i].material = 0;
     }
 
     // 節点座標
@@ -87,23 +89,27 @@ void ElectrostaticAnalyzer::read_material_and_bc(const char *filename)
 
     fscanf(fp, "%d %d %d %d %d", &ntblk, &ntmblk, &ntmate, &npt2, &nlv);
 
-    // 境界条件（Dirichlet条件：固定電位）
+    // 境界条件（1-based → 0-based、Dirichlet固定）
     boundaries.resize(ntblk);
     for (int i = 0; i < ntblk; i++) {
-        fscanf(fp, "%d %d %d %lf",
-               &boundaries[i].node1,
-               &boundaries[i].node2,
+        int n1, n2;
+        fscanf(fp, "%d %d %d %lf", &n1, &n2,
                &boundaries[i].type,
                &boundaries[i].value);  // 電位値 φ [V]
+        boundaries[i].node1 = n1 - 1;
+        boundaries[i].node2 = n2 - 1;
     }
 
-    // 要素の材料番号
+    // 要素の材料番号（element id も 1-based → 0-based）
     for (int i = 0; i < ntmblk; i++) {
         int start, end, mat;
         fscanf(fp, "%d %d %d", &start, &end, &mat);
+        start -= 1;
+        end -= 1;
+        int mat_id = mat - 1;  // 1-based material id → 0-based
         for (int j = start; j <= end; j++) {
-            if (j < elements.size()) {
-                elements[j].material = mat;
+            if (j >= 0 && j < elements.size()) {
+                elements[j].material = mat_id;
             }
         }
     }
@@ -125,14 +131,18 @@ void ElectrostaticAnalyzer::read_material_and_bc(const char *filename)
     current_sources.resize(nodes.size(), 0.0);
 
     for (int i = 0; i < nqt; i++) {
-        int elem;
+        int elem_id;
         double ix, iy, iz;
-        fscanf(fp, "%d %le %le %le", &elem, &ix, &iy, &iz);
+        fscanf(fp, "%d %le %le %le", &elem_id, &ix, &iy, &iz);
+        int elem_index = elem_id - 1;
         // 電流源をノードに分配
-        if (elem < elements.size()) {
+        if (elem_index >= 0 && elem_index < elements.size()) {
             double current_per_node = (ix + iy + iz) / 4.0;
             for (int j = 0; j < 4; j++) {
-                current_sources[elements[elem].nodes[j]] += current_per_node;
+                int node_id = elements[elem_index].nodes[j];
+                if (node_id >= 0 && node_id < current_sources.size()) {
+                    current_sources[node_id] += current_per_node;
+                }
             }
         }
     }
@@ -174,48 +184,57 @@ void ElectrostaticAnalyzer::read_analysis_config(const char *filename)
     printf("Read config: dt=%.3e, nstep=%d\n", dt, nstep);
 }
 
-// 電位分布の計算（Poisson方程式）
-void ElectrostaticAnalyzer::solve()
+// 境界節点を特定
+void ElectrostaticAnalyzer::identify_boundary_nodes()
 {
-    printf("Starting electrostatic analysis...\n");
+    is_boundary_node.assign(nodes.size(), false);
+    std::vector<int> node_element_count(nodes.size(), 0);
 
-    int n = nodes.size();
-    potentials.assign(n, 0.0);
-    if (fixed_node.size() != n) {
-        fixed_node.assign(n, false);
-        fixed_value.assign(n, 0.0);
+    // 各節点が属する要素数をカウント
+    for (const auto &elem : elements) {
+        for (int j = 0; j < 4; j++) {
+            int node_id = elem.nodes[j];
+            if (node_id < nodes.size()) {
+                node_element_count[node_id]++;
+            }
+        }
     }
 
-    // 境界条件を適用
-    apply_boundary_conditions();
+    // 要素数が1以下の節点を境界節点とする
+    int boundary_count = 0;
+    for (int i = 0; i < nodes.size(); i++) {
+        if (node_element_count[i] <= 1) {
+            is_boundary_node[i] = true;
+            boundary_count++;
+        }
+    }
 
-    // 大域剛性行列を組立
-    assemble_global_matrix();
-
-    // 線形方程式を解く
-    solve_linear_system();
-
-    printf("Analysis completed.\n");
+    printf("Identified %d boundary nodes\n", boundary_count);
 }
 
 void ElectrostaticAnalyzer::apply_boundary_conditions()
 {
     for (const auto &bc : boundaries) {
         if (bc.type == 1 || bc.type == 4) {
-            // 型1または4は両端ノードを固定
+            // 型1または4は両端ノードを固定 (Dirichlet)
             fixed_node[bc.node1] = true;
             fixed_value[bc.node1] = bc.value;
             fixed_node[bc.node2] = true;
             fixed_value[bc.node2] = bc.value;
+        } else if (bc.type == 5) {
+            // 型5: Neumann条件 (自由端、電位勾配ゼロ)
+            // 境界節点を固定せず、自然境界条件を適用
+            // 何もしない (デフォルトでNeumann)
         } else {
-            // その他は片側ノードを固定
+            // その他は片側ノードを固定 (Dirichlet)
             fixed_node[bc.node1] = true;
             fixed_value[bc.node1] = bc.value;
         }
     }
 
+    // 固定電位を potentials に反映
     for (int i = 0; i < nodes.size(); ++i) {
-        if (fixed_node[i]) {
+        if (i < fixed_node.size() && fixed_node[i]) {
             potentials[i] = fixed_value[i];
         }
     }
@@ -323,15 +342,8 @@ void ElectrostaticAnalyzer::solve_linear_system()
     for (int iter = 0; iter < max_iter; ++iter) {
         double max_diff = 0.0;
         for (int i = 0; i < n; ++i) {
-            // 境界条件のノードはスキップ
-            bool is_bc = false;
-            for (const auto &bc : boundaries) {
-                if (bc.node1 == i || bc.node2 == i) {
-                    is_bc = true;
-                    break;
-                }
-            }
-            if (is_bc) continue;
+            // 固定ポテンシャルを持つノードはスキップ
+            if (i < fixed_node.size() && fixed_node[i]) continue;
 
             if (global_K[i][i] == 0.0) continue; // 対角要素0はスキップ
 
@@ -374,14 +386,17 @@ void ElectrostaticAnalyzer::read_initial_potential(const char *filename)
         int mat_id;
         double value;
         fscanf(fp, "%d %le", &mat_id, &value);
+        int material_index = mat_id - 1;
 
-        // 材質番号 mat_id の要素のノードに初期電位を設定
+        // 材質番号 material_index の要素のノードに初期電位を設定
         for (const auto &elem : elements) {
-            if (elem.material == mat_id) {
+            if (elem.material == material_index) {
                 for (int j = 0; j < 4; j++) {
                     int node_id = elem.nodes[j];
-                    fixed_node[node_id] = true;
-                    fixed_value[node_id] = value;
+                    if (node_id >= 0 && node_id < fixed_node.size()) {
+                        fixed_node[node_id] = true;
+                        fixed_value[node_id] = value;
+                    }
                 }
             }
         }
@@ -416,4 +431,31 @@ void ElectrostaticAnalyzer::write_potential_distribution(const char *filename)
 
     printf("Wrote %s: %d nodal potentials\n",
            filename, (int)potentials.size());
+}
+
+// 電位分布の計算（Poisson方程式）
+void ElectrostaticAnalyzer::solve()
+{
+    printf("Starting electrostatic analysis...\n");
+
+    int n = nodes.size();
+    potentials.assign(n, 0.0);
+    if (fixed_node.size() != n) {
+        fixed_node.assign(n, false);
+        fixed_value.assign(n, 0.0);
+    }
+
+    // 境界節点を特定
+    identify_boundary_nodes();
+
+    // 境界条件を適用
+    apply_boundary_conditions();
+
+    // 大域剛性行列を組立
+    assemble_global_matrix();
+
+    // 線形方程式を解く
+    solve_linear_system();
+
+    printf("Analysis completed.\n");
 }
