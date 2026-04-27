@@ -1,0 +1,10 @@
+factor = 1000
+
+fig[1] = box{0,0,50,50}
+fig[2] = box{0,0,10,10}
+
+for(i=0;i<=50;i=i+10){
+    for(j=0;j<=50;j=j+10){
+        point = point{i,j}
+    }
+}

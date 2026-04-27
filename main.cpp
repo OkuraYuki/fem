@@ -1,16 +1,25 @@
 #include "electrostatic_analyzer.h"
+#include <cstdio>
 
 int main()
 {
     ElectrostaticAnalyzer analyzer;
 
-    // ファイル読み込み
+    // モデル入力ファイル
     analyzer.read_mesh("in.dat");
-    analyzer.read_material_and_bc("sin.dat");  // 導電率と境界条件
-    analyzer.read_initial_potential("tmate.dat"); // 初期電位
-    analyzer.read_analysis_config("sina.dat");
+    analyzer.read_material_and_bc("sin.dat");
+    analyzer.read_initial_potential("tmate.dat");
 
-    // 電位分布を計算
+    // 設定ファイルは sina.dat を優先し、無ければ sina.dat.t を使う
+    FILE *cfg = fopen("sina.dat", "r");
+    if (cfg) {
+        fclose(cfg);
+        analyzer.read_analysis_config("sina.dat");
+    } else {
+        analyzer.read_analysis_config("sina.dat.t");
+    }
+
+    // 解析実行
     analyzer.solve();
 
     // 結果出力
