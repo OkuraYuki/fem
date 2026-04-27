@@ -2,6 +2,7 @@
 #define ELECTROSTATIC_ANALYZER_H
 
 #include <vector>
+#include <utility>
 
 struct Node {
 	double x, y, z;
@@ -35,7 +36,12 @@ private:
 	std::vector<bool> fixed_node;
 	std::vector<double> fixed_value;
 
-	std::vector<std::vector<double>> global_K;
+	// 疎行列: CSR
+	std::vector<int> global_K_row_ptr;
+	std::vector<int> global_K_col_idx;
+	std::vector<double> global_K_values;
+	// 組立途中の行リスト
+	std::vector<std::vector<std::pair<int, double>>> global_K_rows;
 	std::vector<double> global_F;
 
 	double dt;
@@ -43,6 +49,9 @@ private:
 	double unit;
 
 	void add_fixed_node(int node, double value, bool overwrite);
+	void build_sparse_matrix();
+	void apply_dirichlet_constraints(std::vector<double> &rhs);
+	void matvec(const std::vector<double> &x, std::vector<double> &y) const;
 
 public:
 	ElectrostaticAnalyzer();
