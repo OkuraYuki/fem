@@ -12,7 +12,6 @@
 |---|---|
 | `main.cpp` | エントリーポイント |
 | `electrostatic_analyzer.h/.cpp` | FEM解析クラス本体 |
-| `pdesolver2d.h/.cpp` | 2次元PDE反復ソルバー（参考実装） |
 | `electrostatic` | コンパイル済み実行バイナリ |
 
 ---
