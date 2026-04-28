@@ -1,8 +1,12 @@
 #include "electrostatic_analyzer.h"
 
 #include <cstdio>
+#include <cctype>
 #include <cmath>
 #include <algorithm>
+#include <sstream>
+#include <string>
+#include <vector>
 
 ElectrostaticAnalyzer::ElectrostaticAnalyzer()
 	: dt(0.0), nstep(200), unit(1.0)
@@ -15,6 +19,86 @@ void ElectrostaticAnalyzer::add_fixed_node(int node, double value, bool overwrit
 	if (!fixed_node[node] || overwrite) {
 		fixed_node[node] = true;
 		fixed_value[node] = value;
+	}
+}
+
+void ElectrostaticAnalyzer::build_sparse_matrix()
+{
+	const int n = (int)nodes.size();
+	global_K_row_ptr.assign(n + 1, 0);
+	global_K_col_idx.clear();
+	global_K_values.clear();
+
+	for (int r = 0; r < n; ++r) {
+		std::vector<std::pair<int, double>> row = global_K_rows[r];
+		std::sort(row.begin(), row.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b) {
+			return a.first < b.first;
+		});
+
+		for (size_t i = 0; i < row.size(); ) {
+			int c = row[i].first;
+			double sum = 0.0;
+			size_t j = i;
+			while (j < row.size() && row[j].first == c) {
+				sum += row[j].second;
+				++j;
+			}
+			if (std::fabs(sum) > 1e-30) {
+				global_K_col_idx.push_back(c);
+				global_K_values.push_back(sum);
+			}
+			i = j;
+		}
+		global_K_row_ptr[r + 1] = (int)global_K_col_idx.size();
+	}
+}
+
+void ElectrostaticAnalyzer::apply_dirichlet_constraints(std::vector<double> &rhs)
+{
+	const int n = (int)nodes.size();
+	for (int i = 0; i < n; ++i) {
+		if (!fixed_node[i]) continue;
+
+		for (int r = 0; r < n; ++r) {
+			for (int p = global_K_row_ptr[r]; p < global_K_row_ptr[r + 1]; ++p) {
+				if (global_K_col_idx[p] != i) continue;
+				if (r != i) {
+					rhs[r] -= global_K_values[p] * fixed_value[i];
+				}
+				global_K_values[p] = 0.0;
+			}
+		}
+
+		bool has_diag = false;
+		for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
+			if (global_K_col_idx[p] == i) {
+				global_K_values[p] = 1.0;
+				has_diag = true;
+			} else {
+				global_K_values[p] = 0.0;
+			}
+		}
+		if (!has_diag) {
+			global_K_col_idx.insert(global_K_col_idx.begin() + global_K_row_ptr[i + 1], i);
+			global_K_values.insert(global_K_values.begin() + global_K_row_ptr[i + 1], 1.0);
+			for (int r = i + 1; r <= n; ++r) {
+				++global_K_row_ptr[r];
+			}
+		}
+		rhs[i] = fixed_value[i];
+	}
+}
+
+void ElectrostaticAnalyzer::matvec(const std::vector<double> &x, std::vector<double> &y) const
+{
+	const int n = (int)nodes.size();
+	y.assign(n, 0.0);
+	for (int r = 0; r < n; ++r) {
+		double sum = 0.0;
+		for (int p = global_K_row_ptr[r]; p < global_K_row_ptr[r + 1]; ++p) {
+			sum += global_K_values[p] * x[global_K_col_idx[p]];
+		}
+		y[r] = sum;
 	}
 }
 
@@ -77,29 +161,92 @@ void ElectrostaticAnalyzer::read_material_and_bc(const char *filename)
 		return;
 	}
 
-	boundaries.assign(ntblk, BoundaryCondition{0, 0, 0, 0.0});
-	for (int i = 0; i < ntblk; ++i) {
-		int node1 = 0, node2 = 0, type = 0;
-		double value = 0.0;
-		if (fscanf(fp, "%d %d %d %lf", &node1, &node2, &type, &value) != 4) {
-			printf("Invalid boundary record at %d in %s\n", i + 1, filename);
-			fclose(fp);
-			return;
+	std::vector<std::string> lines;
+	char buf[1024];
+	while (fgets(buf, sizeof(buf), fp)) {
+		std::string line(buf);
+		// 空白のみの行を除外
+		bool all_space = true;
+		for (char c : line) {
+			if (!isspace((unsigned char)c)) {
+				all_space = false;
+				break;
+			}
 		}
-		boundaries[i].node1 = node1 - 1; // 1-based -> 0-based
-		boundaries[i].node2 = node2 - 1;
-		boundaries[i].type = type;
-		boundaries[i].value = value;
+		if (!all_space) lines.push_back(line);
+	}
+	fclose(fp);
+
+	auto count_tokens = [](const std::string &line) -> int {
+		std::istringstream iss(line);
+		int count = 0;
+		double dummy;
+		while (iss >> dummy) ++count;
+		return count;
+	};
+
+	auto parse_ints = [](const std::string &line, std::vector<int> &out) -> bool {
+		std::istringstream iss(line);
+		int v;
+		out.clear();
+		while (iss >> v) out.push_back(v);
+		return !out.empty();
+	};
+
+	auto parse_doubles = [](const std::string &line, std::vector<double> &out) -> bool {
+		std::istringstream iss(line);
+		double v;
+		out.clear();
+		while (iss >> v) out.push_back(v);
+		return !out.empty();
+	};
+
+	// 先頭行の列数から「境界あり/なし」を推定
+	bool has_boundary_section = false;
+	for (const std::string &line : lines) {
+		int tok = count_tokens(line);
+		if (tok == 4) {
+			has_boundary_section = true;
+		}
+		break;
+	}
+
+	boundaries.clear();
+	int idx = 0;
+	if (has_boundary_section && ntblk > 0) {
+		boundaries.assign(ntblk, BoundaryCondition{0, 0, 0, 0.0});
+		for (int i = 0; i < ntblk && idx < (int)lines.size(); ++i, ++idx) {
+			std::vector<int> vals;
+			std::istringstream iss(lines[idx]);
+			double dv = 0.0;
+			int iv = 0;
+			if (!(iss >> iv)) break;
+			int n1 = iv;
+			if (!(iss >> iv)) break;
+			int n2 = iv;
+			if (!(iss >> iv)) break;
+			int type = iv;
+			if (!(iss >> dv)) break;
+			boundaries[i].node1 = n1 - 1;
+			boundaries[i].node2 = n2 - 1;
+			boundaries[i].type = type;
+			boundaries[i].value = dv;
+		}
+	} else {
+		// 境界条件なし
+		ntblk = 0;
 	}
 
 	// 要素の材料番号割り当て
-	for (int i = 0; i < ntmblk; ++i) {
-		int start = 0, end = 0, mat = 0;
-		if (fscanf(fp, "%d %d %d", &start, &end, &mat) != 3) {
+	for (int i = 0; i < ntmblk && idx < (int)lines.size(); ++i, ++idx) {
+		std::vector<int> vals;
+		if (!parse_ints(lines[idx], vals) || vals.size() < 3) {
 			printf("Invalid material block record at %d in %s\n", i + 1, filename);
-			fclose(fp);
 			return;
 		}
+		int start = vals[0];
+		int end = vals[1];
+		int mat = vals[2];
 		int mat_id = mat - 1; // 1-based -> 0-based
 		for (int e = start - 1; e <= end - 1; ++e) {
 			if (0 <= e && e < (int)elements.size()) {
@@ -109,31 +256,34 @@ void ElectrostaticAnalyzer::read_material_and_bc(const char *filename)
 	}
 
 	materials.assign(ntmate, Material{1.0, 1.0, 1.0, 0.0, 0.0});
-	for (int i = 0; i < ntmate; ++i) {
-		if (fscanf(fp, "%lf %lf %lf %lf", &materials[i].sx, &materials[i].sy, &materials[i].sz, &materials[i].ro) != 4) {
-			// 5列形式にも対応
-			fseek(fp, 0, SEEK_CUR);
-			double cv = 0.0;
-			if (fscanf(fp, "%lf %lf %lf %lf %lf", &materials[i].sx, &materials[i].sy, &materials[i].sz, &materials[i].ro, &cv) == 5) {
-				materials[i].cv = cv;
-			} else {
-				printf("Invalid material record at %d in %s\n", i + 1, filename);
-				fclose(fp);
-				return;
-			}
+	for (int i = 0; i < ntmate && idx < (int)lines.size(); ++i, ++idx) {
+		std::vector<double> vals;
+		if (!parse_doubles(lines[idx], vals) || (vals.size() != 4 && vals.size() != 5)) {
+			printf("Invalid material record at %d in %s\n", i + 1, filename);
+			return;
 		}
+		materials[i].sx = vals[0];
+		materials[i].sy = vals[1];
+		materials[i].sz = vals[2];
+		materials[i].ro = vals[3];
+		materials[i].cv = (vals.size() == 5) ? vals[4] : 0.0;
 	}
 
 	int nqt = 0;
-	if (fscanf(fp, "%d", &nqt) != 1) {
-		nqt = 0;
+	if (idx < (int)lines.size()) {
+		std::vector<int> vals;
+		if (parse_ints(lines[idx], vals) && !vals.empty()) {
+			nqt = vals[0];
+			++idx;
+		}
 	}
 
 	current_sources.assign(nodes.size(), 0.0);
-	for (int i = 0; i < nqt; ++i) {
-		int elem_id = 0;
-		double ix = 0.0, iy = 0.0, iz = 0.0;
-		if (fscanf(fp, "%d %lf %lf %lf", &elem_id, &ix, &iy, &iz) != 4) break;
+	for (int i = 0; i < nqt && idx < (int)lines.size(); ++i, ++idx) {
+		std::vector<double> vals;
+		if (!parse_doubles(lines[idx], vals) || vals.size() < 4) break;
+		int elem_id = (int)vals[0];
+		double ix = vals[1], iy = vals[2], iz = vals[3];
 		int e = elem_id - 1;
 		if (0 <= e && e < (int)elements.size()) {
 			double per_node = (ix + iy + iz) / 4.0;
@@ -144,8 +294,7 @@ void ElectrostaticAnalyzer::read_material_and_bc(const char *filename)
 		}
 	}
 
-	fclose(fp);
-	printf("Read material & BC: %d materials, %d boundary conditions, %d current sources\n", ntmate, ntblk, nqt);
+	printf("Read material & BC: %d materials, %d boundary conditions, %d current sources\n", ntmate, (int)boundaries.size(), nqt);
 }
 
 void ElectrostaticAnalyzer::read_initial_potential(const char *filename)
@@ -231,7 +380,7 @@ void ElectrostaticAnalyzer::apply_boundary_conditions()
 void ElectrostaticAnalyzer::assemble_global_matrix()
 {
 	const int n = (int)nodes.size();
-	global_K.assign(n, std::vector<double>(n, 0.0));
+	global_K_rows.assign(n, {});
 	global_F.assign(n, 0.0);
 
 	for (size_t e = 0; e < elements.size(); ++e) {
@@ -293,52 +442,90 @@ void ElectrostaticAnalyzer::assemble_global_matrix()
 		for (int a = 0; a < 4; ++a) {
 			for (int b = 0; b < 4; ++b) {
 				double dot = gradN[a][0] * gradN[b][0] + gradN[a][1] * gradN[b][1] + gradN[a][2] * gradN[b][2];
-				global_K[gid[a]][gid[b]] += sigma * dot * volume;
+				double ke = sigma * dot * volume;
+				global_K_rows[gid[a]].push_back(std::make_pair(gid[b], ke));
 			}
 			global_F[gid[a]] += (gid[a] < (int)current_sources.size() ? current_sources[gid[a]] * volume / 4.0 : 0.0);
 		}
 	}
 
-	printf("Assembled global matrix: %dx%d\n", n, n);
+	build_sparse_matrix();
+
+	printf("Assembled sparse global matrix: %dx%d, nnz=%d\n", n, n, (int)global_K_values.size());
 }
 
 void ElectrostaticAnalyzer::solve_linear_system()
 {
 	const int n = (int)nodes.size();
-	const int max_iter = std::max(10, nstep);
-	const double tol = 1e-8;
+	const int max_iter = std::max(50, nstep);
+	const double tol = 1e-10;
 
-	for (int iter = 0; iter < max_iter; ++iter) {
-		double max_diff = 0.0;
+	std::vector<double> rhs = global_F;
+	apply_dirichlet_constraints(rhs);
 
-		for (int i = 0; i < n; ++i) {
-			if (fixed_node[i]) {
-				potentials[i] = fixed_value[i];
-				continue;
-			}
-
-			double aii = global_K[i][i];
-			if (std::fabs(aii) < 1e-20) continue;
-
-			double rhs = global_F[i];
-			for (int j = 0; j < n; ++j) {
-				if (j == i) continue;
-				rhs -= global_K[i][j] * potentials[j];
-			}
-
-			double new_phi = rhs / aii;
-			double diff = std::fabs(new_phi - potentials[i]);
-			if (diff > max_diff) max_diff = diff;
-			potentials[i] = new_phi;
-		}
-
-		if (max_diff < tol) {
-			printf("Converged at iteration %d\n", iter + 1);
-			break;
-		}
+	std::vector<double> x = potentials;
+	for (int i = 0; i < n; ++i) {
+		if (fixed_node[i]) x[i] = fixed_value[i];
 	}
 
-	printf("Solved linear system with Gauss-Seidel\n");
+	std::vector<double> r(n, 0.0), p(n, 0.0), Ap(n, 0.0);
+	matvec(x, Ap);
+	for (int i = 0; i < n; ++i) {
+		r[i] = rhs[i] - Ap[i];
+		if (fixed_node[i]) r[i] = 0.0;
+		p[i] = r[i];
+	}
+
+	auto dot = [](const std::vector<double> &a, const std::vector<double> &b) -> double {
+		double s = 0.0;
+		for (size_t i = 0; i < a.size(); ++i) s += a[i] * b[i];
+		return s;
+	};
+
+	double rsold = dot(r, r);
+	if (rsold < tol * tol) {
+		potentials = x;
+		printf("Converged at iteration 0\n");
+		printf("Solved linear system with Conjugate Gradient\n");
+		return;
+	}
+
+	int iter_done = 0;
+	for (int iter = 0; iter < max_iter; ++iter) {
+		matvec(p, Ap);
+		double denom = dot(p, Ap);
+		if (std::fabs(denom) < 1e-30) break;
+
+		double alpha = rsold / denom;
+		for (int i = 0; i < n; ++i) {
+			x[i] += alpha * p[i];
+			r[i] -= alpha * Ap[i];
+			if (fixed_node[i]) {
+				x[i] = fixed_value[i];
+				r[i] = 0.0;
+			}
+		}
+
+		double rsnew = dot(r, r);
+		iter_done = iter + 1;
+		if (std::sqrt(rsnew) < tol) {
+			printf("Converged at iteration %d\n", iter_done);
+			break;
+		}
+
+		double beta = rsnew / rsold;
+		for (int i = 0; i < n; ++i) {
+			p[i] = r[i] + beta * p[i];
+		}
+		rsold = rsnew;
+	}
+
+	potentials = x;
+	for (int i = 0; i < n; ++i) {
+		if (fixed_node[i]) potentials[i] = fixed_value[i];
+	}
+
+	printf("Solved linear system with Conjugate Gradient\n");
 }
 
 void ElectrostaticAnalyzer::solve()
@@ -352,6 +539,15 @@ void ElectrostaticAnalyzer::solve()
 	}
 
 	apply_boundary_conditions();
+	if (std::none_of(fixed_node.begin(), fixed_node.end(), [](bool v) { return v; })) {
+		// 境界固定が無い場合は基準点を1つだけ 0V に固定して特異性を避ける
+		if (!fixed_node.empty()) {
+			fixed_node[0] = true;
+			fixed_value[0] = 0.0;
+			potentials[0] = 0.0;
+			printf("No fixed nodes found; node 1 is used as a reference potential (0.0V)\n");
+		}
+	}
 	assemble_global_matrix();
 	solve_linear_system();
 
