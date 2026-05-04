@@ -1,0 +1,2 @@
+model_name,mesh_file,material_file,initial_file,config_file,output_dir,nodes,elements,boundaries,fixed_materials,materials,final_step,final_time,final_max_diff,converged_early
+model_2,models/model_2/in.dat,models/model_2/sin.dat,models/model_2/tmate.dat,models/model_2/sina.dat.t,output/model_2,216,750,0,1,2,30,0.03,0.000971251,no
