@@ -1,0 +1,6 @@
+# Simple model name list
+# Each model should have its data in models/<model_name>/
+# Input files: in.dat, sin.dat, tmate.dat, sina.dat.t
+# Output: output/<model_name>/
+model_1
+model_2

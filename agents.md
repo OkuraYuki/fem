@@ -271,3 +271,195 @@ x1 y1 z1
 - **Memory**：O(n_nodes + nnz) for sparse matrices
 - **Typical Case**：132k nodes → ~2M nonzeros, <1s solve per step
 
+---
+
+## Model Management System (v2.0)
+
+### Architecture
+
+実装は**モデルベースの管理システム**へ移行しました。複数の異なるメッシュ・材料条件を同時に管理・実行できます。
+
+#### ディレクトリ構造
+
+```
+fem/
+  models/                    ← モデルデータ（入力）
+    model_1/
+      in.dat               ← メッシュ
+      sin.dat              ← 材料・BC
+      tmate.dat            ← 初期電位
+      sina.dat.t           ← 解析設定（時間ステップ）
+    model_2/
+      (同じ構造)
+    model_3/ ...
+  
+  output/                    ← 結果出力
+    model_1/
+      tempa.dat001~010     ← ステップごとの電位分布
+      analysis_summary.txt ← 解析レポート
+    model_2/
+      (同じ構造)
+  
+  models.dat                 ← モデル指定リスト
+  batch_summary.csv          ← バッチ実行結果集約（全モデル統計）
+```
+
+### models.dat — モデル指定リスト
+
+```
+# Simple model name list
+# Each model should have its data in models/<model_name>/
+model_1
+model_2
+model_3
+```
+
+- **シンプル形式**：1行に1つのモデル名
+- **自動パス解決**：
+  - 入力：`models/<model_name>/` から in.dat, sin.dat, tmate.dat, sina.dat.t を自動読み込み
+  - 出力：`output/<model_name>/` に自動書き込み
+
+### 実行方法
+
+#### すべてのモデル実行（バッチモード）
+```bash
+./fem.exe models.dat
+```
+
+#### 特定のモデルのみ実行
+```bash
+./fem.exe models.dat model_1      # model_1 のみ
+./fem.exe models.dat model_2      # model_2 のみ
+```
+
+#### 単一モデル実行（レガシーモード、models.dat なし）
+```bash
+./fem.exe
+# → models/ の存在チェック
+# → ない場合は root の in.dat, sin.dat 等から読み込み
+```
+
+### Output Files
+
+各モデルの結果は `output/<model_name>/` に保存：
+
+1. **tempa.dat001～**
+   - ステップごとの節点電位分布
+   - 6列形式（小数点以下7桁）
+
+2. **analysis_summary.txt**
+   - メッシュ情報（ノード数・要素数）
+   - 境界条件・材料数
+   - 要素範囲（材料ブロック）
+   - 収束情報（最終ステップ・時間・最大差分・早期収束フラグ）
+
+3. **batch_summary.csv** （複数モデル実行時のみ）
+   ```
+   model_name,mesh_file,material_file,output_dir,nodes,elements,...,final_step,final_time,final_max_diff,converged_early
+   model_1,models/model_1/in.dat,...,output/model_1,...,10,0.01,9.91e-04,no
+   model_2,models/model_2/in.dat,...,output/model_2,...,10,0.01,9.91e-04,no
+   ```
+
+### 新しいモデル追加手順
+
+1. **フォルダ作成**
+   ```bash
+   mkdir models/model_3
+   ```
+
+2. **入力ファイル配置**
+   ```bash
+   cp models/model_1/in.dat models/model_3/
+   # sin.dat, tmate.dat, sina.dat.t も同様
+   # または異なるメッシュ・材料条件を用意
+   ```
+
+3. **models.dat に追加**
+   ```
+   model_1
+   model_2
+   model_3  ← 新規
+   ```
+
+4. **実行**
+   ```bash
+   ./fem.exe models.dat model_3
+   ```
+
+### Implementation Details
+
+**main.cpp** の主要機能：
+- `load_model_specs()`: models.dat を解析、モデル名リストを抽出
+- `run_one_model()`: 各モデルをシーケンシャル実行
+- `create_directory_recursive()`: output フォルダを自動作成（Windows/Unix対応）
+- `join_path()`: フォルダパスの連結
+
+**ElectrostaticAnalyzer** の拡張：
+- `set_output_paths()`: 出力フォルダをモデルごとに配置
+- `get_*()`: バッチCSV用のメタデータ取得メソッド
+
+### Advantages
+
+✅ **モデル分離**  
+- 入力・出力がモデルごとに整理される  
+- 上書きの心配なし
+
+✅ **バッチ実行**  
+- `models.dat` に追加するだけで複数モデル同時実行  
+- 結果は `batch_summary.csv` に集約
+
+✅ **スクリプト化対応**  
+- シェルスクリプトや Python で自動実行可能  
+- パラメータスイープが容易
+
+✅ **トレーサビリティ**  
+- analysis_summary.txt で各モデルの設定記録  
+- 入力ファイルパスが batch_summary.csv に記録
+
+### Migration from v1.0
+
+v1.0（単一モデル）から v2.0（マルチモデル）への移行：
+
+```bash
+# v1.0: root の in.dat, sin.dat を移動
+mkdir -p models/default
+mv in.dat sin.dat tmate.dat sina.dat models/default/
+
+# models.dat 作成
+echo "default" > models.dat
+
+# 実行
+./fem.exe models.dat default
+```
+
+カレントディレクトリの in.dat などが存在しなる場合は自動的にレガシーモード（エラー）になります。
+
+---
+
+## Current Status (v2.0)
+
+### ✅ Implemented
+- ✅ 異方性導電率（σx, σy, σz個別使用）
+- ✅ 異方性誘電率（εx, εy, εz）
+- ✅ 時間依存定式化（Backward Euler）
+- ✅ CSR疎行列フォーマット
+- ✅ 境界条件（Dirichlet固定値）
+- ✅ 電流ソース項
+- ✅ 収束判定（max_diff < 1e-8 V）
+- ✅ **モデル管理システム（v2.0新機能）**
+- ✅ **バッチ実行・モデル指定実行**
+- ✅ **分析レポート出力**
+- ✅ **バッチCSV集約**
+
+### ⚠️ Known Limitations
+- ⚠️ シーケンシャル実行のみ（並列化未対応）
+- ⚠️ 大規模メッシュ（>500k nodes）での性能未検証
+
+### 🔜 Future Enhancements
+- 🔜 モデル間の依存関係・データ共有
+- 🔜 並列実行（OpenMP/MPI）
+- 🔜 パラメータスイープ自動化
+- 🔜 可視化モジュール（ParaView連携）
+- 🔜 Neumann/Robin 境界条件
+- 🔜 適応メッシュ細分化
+
