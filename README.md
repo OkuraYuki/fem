@@ -279,6 +279,4 @@ g++ -std=c++11 main.cpp electrostatic_analyzer.cpp -o fem.exe
    ```
 
 ---
-
-- 技術解説資料: `electrostatic_fem_solver_technical_guide.md`
 - 実装背景: `agents.md`
