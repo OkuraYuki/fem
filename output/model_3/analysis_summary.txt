@@ -1,0 +1,46 @@
+Electrostatic FEM Analysis Summary
+=================================
+
+Mesh
+----
+Nodes: 216
+Elements: 750
+
+Analysis Conditions
+-------------------
+dt: 1.000000e-03
+nstep(max): 500
+convergence_tolerance: 1.000000e-08
+final_step: 3
+final_time: 3.000000e-03
+final_max_diff: 5.971368e-11
+converged_early: yes
+
+Boundary Conditions
+-------------------
+count: 0
+
+Fixed Materials (tmate.dat)
+---------------------------
+count: 1
+1: material_id=1 value=1.000000e+00
+
+Material Properties
+-------------------
+count: 2
+1: sigma=(5.800000e+07, 5.800000e+07, 5.800000e+07) epsilon=(8.900000e-12, 8.900000e-12, 8.900000e-12)
+2: sigma=(1.000000e-02, 1.000000e-02, 8.000000e-03) epsilon=(1.000000e-10, 1.000000e-10, 1.000000e-10)
+
+Material Block Ranges
+---------------------
+count: 10
+1: start=1 end=144 material_id=2
+2: start=151 end=294 material_id=2
+3: start=301 end=444 material_id=2
+4: start=451 end=594 material_id=2
+5: start=601 end=744 material_id=2
+6: start=145 end=150 material_id=1
+7: start=295 end=300 material_id=2
+8: start=445 end=450 material_id=2
+9: start=595 end=600 material_id=2
+10: start=745 end=750 material_id=2
