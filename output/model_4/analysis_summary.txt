@@ -8,13 +8,13 @@ Elements: 750
 
 Analysis Conditions
 -------------------
-dt: 1.000000e-03
-nstep(max): 30
+dt: 1.500000e-20
+nstep(max): 500
 convergence_tolerance: 1.000000e-08
-final_step: 30
-final_time: 3.000000e-02
-final_max_diff: 9.712513e-04
-converged_early: no
+final_step: 1
+final_time: 1.500000e-20
+final_max_diff: 1.408988e-12
+converged_early: yes
 
 Boundary Conditions
 -------------------
@@ -28,8 +28,8 @@ count: 1
 Material Properties
 -------------------
 count: 2
-1: sigma=(1.000000e+00, 1.000000e+00, 1.000000e+00) epsilon=(1.000000e+00, 1.000000e+00, 1.000000e+00)
-2: sigma=(1.000000e+00, 1.000000e+00, 1.000000e+00) epsilon=(1.000000e+00, 1.000000e+00, 1.000000e+00)
+1: sigma=(5.800000e+07, 5.800000e+07, 5.800000e+07) epsilon=(8.900000e-12, 8.900000e-12, 8.900000e-12)
+2: sigma=(1.000000e-02, 1.000000e-02, 8.000000e-03) epsilon=(1.000000e-10, 1.000000e-10, 1.000000e-10)
 
 Material Block Ranges
 ---------------------

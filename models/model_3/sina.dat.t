@@ -1,5 +1,5 @@
    0   0   0   0   0   0   0  = ifvolt,ifadat,ifaeg,ifb0,iefrr,ifmove,ifwoff
- 1000   0   0   0   0   0   0  = nstep,nwave,ifconv,iftime,ifcont,ifbdat,ifje
+ 500   0   0   0   0   0   0  = nstep,nwave,ifconv,iftime,ifcont,ifbdat,ifje
  1.00000E-03 0.00000E+00   0  = dt(s), time0(s), istep2
  0.00000E+00 0.00000E+00      = freq(Hz), freq-end(Hz)
    0  15   0                  = ifmat, mite, ia18
