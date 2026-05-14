@@ -1,0 +1,215 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "inspect model7 region",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"inspect_model7_region.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "inspect model7 region",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"inspect_model7_region.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "analyze fixed vs material",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"analyze_fixed_vs_material.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "scan tempa for exponents",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"-c",
+				"from pathlib import Path\nimport re\ns=Path('output/model_7/tempa.dat001').read_text()\nthree_digit = re.findall(r'E[+-]\\d{3}', s)\nprint('3-digit exponents count:', len(three_digit))\nconcat = re.findall(r'(\\d[Ee][+-]\\d{2}[-+])', s)\nprint('possible concatenations samples (up to 5):', concat[:5])\nno_space = re.findall(r'[0-9][Ee][+-]\\d{2}[-+][0-9]', s)\nprint('no_space matches:', len(no_space))\nfor i,l in enumerate(s.splitlines()):\n    if re.search(r'E[+-]\\d{3}', l):\n        print('line', i+1, l)\n        break\n"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "run scan_tempa",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"scripts/scan_tempa.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "build fem_test",
+			"type": "shell",
+			"command": "g++",
+			"args": [
+				"-O2",
+				"main.cpp",
+				"electrostatic_analyzer.cpp",
+				"-o",
+				"fem_test"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "run model_1",
+			"type": "shell",
+			"command": "./fem_test",
+			"args": [
+				"models.dat",
+				"model_1"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "run model_7",
+			"type": "shell",
+			"command": "./fem_test",
+			"args": [
+				"models.dat",
+				"model_7"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "build fem_test",
+			"type": "shell",
+			"command": "g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem_test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "run model_7",
+			"type": "shell",
+			"command": "./fem_test",
+			"args": [
+				"models.dat",
+				"model_7"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "build fem_test",
+			"type": "shell",
+			"command": "g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem_test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "run model_7 again",
+			"type": "shell",
+			"command": "./fem_test",
+			"args": [
+				"models.dat",
+				"model_7"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "scan tempa fixed-width",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"-c",
+				"import sys\nfn='output/model_7/tempa.dat001'\nbad=[]\ntotal=0\nwith open(fn,'r') as f:\n    for ln,l in enumerate(f,1):\n        s=l.rstrip('\\n')\n        # pad to multiple of 12\n        L=len(s)\n        # If line shorter than 12, skip\n        for i in range(0, L, 12):\n            chunk=s[i:i+12]\n            if not chunk.strip():\n                continue\n            total+=1\n            try:\n                float(chunk)\n            except Exception as e:\n                bad.append((ln,i+1,chunk))\nprint('file:',fn)\nprint('total_fields:',total)\nprint('bad_count:',len(bad))\nif bad:\n    print('first_bad:',bad[0])\n    for b in bad[:10]: print(b)\n"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "run scan script",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"/tmp/scan_tempa_model7.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "check fixed values",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"/tmp/check_fixed_values_model7.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "build fem_test",
+			"type": "shell",
+			"command": "g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem_test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "build fem_test",
+			"type": "shell",
+			"command": "g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem_test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "run model_7",
+			"type": "shell",
+			"command": "./fem_test",
+			"args": [
+				"models.dat",
+				"model_7"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "rebuild and run model_7",
+			"type": "shell",
+			"command": "g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem_test && ./fem_test models.dat model_7",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		}
+	]
+}

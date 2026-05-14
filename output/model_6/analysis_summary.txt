@@ -1,0 +1,211 @@
+Electrostatic FEM Analysis Summary
+=================================
+
+Mesh
+----
+Nodes: 101045
+Elements: 573852
+
+Analysis Conditions
+-------------------
+dt: 1.000000e-06
+nstep(max): 200
+convergence_tolerance: 1.000000e-08
+final_step: 200
+final_time: 2.000000e-04
+final_max_diff: 2.493849e-05
+converged_early: no
+
+Boundary Conditions
+-------------------
+count: 0
+
+Fixed Materials (tmate.dat)
+---------------------------
+count: 2
+1: material_id=1 value=-1.000000e+00
+2: material_id=2 value=1.000000e+00
+
+Material Properties
+-------------------
+count: 6
+1: sigma=(5.800000e+07, 5.800000e+07, 5.800000e+07) epsilon=(8.900000e-12, 8.900000e-12, 8.900000e-12)
+2: sigma=(5.800000e+07, 5.800000e+07, 5.800000e+07) epsilon=(8.900000e-12, 8.900000e-12, 8.900000e-12)
+3: sigma=(5.800000e+07, 5.800000e+07, 5.800000e+07) epsilon=(8.900000e-12, 8.900000e-12, 8.900000e-12)
+4: sigma=(5.800000e+07, 5.800000e+07, 5.800000e+07) epsilon=(8.900000e-12, 8.900000e-12, 8.900000e-12)
+5: sigma=(1.000000e-02, 1.000000e-02, 8.000000e-03) epsilon=(1.000000e-10, 1.000000e-10, 1.000000e-10)
+6: sigma=(1.000000e-02, 1.000000e-02, 8.000000e-03) epsilon=(1.000000e-10, 1.000000e-10, 1.000000e-10)
+
+Material Block Ranges
+---------------------
+count: 170
+1: start=1 end=18 material_id=6
+2: start=16879 end=16896 material_id=6
+3: start=33757 end=33774 material_id=6
+4: start=50635 end=50652 material_id=6
+5: start=67513 end=67530 material_id=6
+6: start=84391 end=84408 material_id=6
+7: start=101269 end=101286 material_id=6
+8: start=118147 end=118164 material_id=6
+9: start=135025 end=135042 material_id=6
+10: start=151903 end=151920 material_id=6
+11: start=168781 end=168798 material_id=6
+12: start=185659 end=185676 material_id=6
+13: start=202537 end=202554 material_id=6
+14: start=219415 end=219432 material_id=6
+15: start=236293 end=236310 material_id=6
+16: start=253171 end=253188 material_id=1
+17: start=270049 end=270066 material_id=1
+18: start=286927 end=286944 material_id=1
+19: start=303805 end=303822 material_id=1
+20: start=320683 end=320700 material_id=5
+21: start=337561 end=337578 material_id=5
+22: start=354439 end=354456 material_id=5
+23: start=371317 end=371334 material_id=5
+24: start=388195 end=388212 material_id=5
+25: start=405073 end=405090 material_id=5
+26: start=421951 end=421968 material_id=5
+27: start=438829 end=438846 material_id=5
+28: start=455707 end=455724 material_id=5
+29: start=472585 end=472602 material_id=5
+30: start=489463 end=489480 material_id=5
+31: start=506341 end=506358 material_id=5
+32: start=523219 end=523236 material_id=5
+33: start=540097 end=540114 material_id=5
+34: start=556975 end=556992 material_id=5
+35: start=19 end=36 material_id=6
+36: start=16897 end=16914 material_id=6
+37: start=33775 end=33792 material_id=6
+38: start=50653 end=50670 material_id=6
+39: start=67531 end=67548 material_id=6
+40: start=84409 end=84426 material_id=6
+41: start=101287 end=101304 material_id=6
+42: start=118165 end=118182 material_id=6
+43: start=135043 end=135060 material_id=6
+44: start=151921 end=151938 material_id=6
+45: start=168799 end=168816 material_id=6
+46: start=185677 end=185694 material_id=6
+47: start=202555 end=202572 material_id=6
+48: start=219433 end=219450 material_id=6
+49: start=236311 end=236328 material_id=6
+50: start=253189 end=253206 material_id=2
+51: start=270067 end=270084 material_id=2
+52: start=286945 end=286962 material_id=2
+53: start=303823 end=303840 material_id=2
+54: start=320701 end=320718 material_id=5
+55: start=337579 end=337596 material_id=5
+56: start=354457 end=354474 material_id=5
+57: start=371335 end=371352 material_id=5
+58: start=388213 end=388230 material_id=5
+59: start=405091 end=405108 material_id=5
+60: start=421969 end=421986 material_id=5
+61: start=438847 end=438864 material_id=5
+62: start=455725 end=455742 material_id=5
+63: start=472603 end=472620 material_id=5
+64: start=489481 end=489498 material_id=5
+65: start=506359 end=506376 material_id=5
+66: start=523237 end=523254 material_id=5
+67: start=540115 end=540132 material_id=5
+68: start=556993 end=557010 material_id=5
+69: start=37 end=54 material_id=6
+70: start=16915 end=16932 material_id=6
+71: start=33793 end=33810 material_id=6
+72: start=50671 end=50688 material_id=6
+73: start=67549 end=67566 material_id=6
+74: start=84427 end=84444 material_id=6
+75: start=101305 end=101322 material_id=6
+76: start=118183 end=118200 material_id=6
+77: start=135061 end=135078 material_id=6
+78: start=151939 end=151956 material_id=6
+79: start=168817 end=168834 material_id=6
+80: start=185695 end=185712 material_id=6
+81: start=202573 end=202590 material_id=6
+82: start=219451 end=219468 material_id=6
+83: start=236329 end=236346 material_id=6
+84: start=253207 end=253224 material_id=3
+85: start=270085 end=270102 material_id=3
+86: start=286963 end=286980 material_id=3
+87: start=303841 end=303858 material_id=3
+88: start=320719 end=320736 material_id=5
+89: start=337597 end=337614 material_id=5
+90: start=354475 end=354492 material_id=5
+91: start=371353 end=371370 material_id=5
+92: start=388231 end=388248 material_id=5
+93: start=405109 end=405126 material_id=5
+94: start=421987 end=422004 material_id=5
+95: start=438865 end=438882 material_id=5
+96: start=455743 end=455760 material_id=5
+97: start=472621 end=472638 material_id=5
+98: start=489499 end=489516 material_id=5
+99: start=506377 end=506394 material_id=5
+100: start=523255 end=523272 material_id=5
+101: start=540133 end=540150 material_id=5
+102: start=557011 end=557028 material_id=5
+103: start=55 end=72 material_id=6
+104: start=16933 end=16950 material_id=6
+105: start=33811 end=33828 material_id=6
+106: start=50689 end=50706 material_id=6
+107: start=67567 end=67584 material_id=6
+108: start=84445 end=84462 material_id=6
+109: start=101323 end=101340 material_id=6
+110: start=118201 end=118218 material_id=6
+111: start=135079 end=135096 material_id=6
+112: start=151957 end=151974 material_id=6
+113: start=168835 end=168852 material_id=6
+114: start=185713 end=185730 material_id=6
+115: start=202591 end=202608 material_id=6
+116: start=219469 end=219486 material_id=6
+117: start=236347 end=236364 material_id=6
+118: start=253225 end=253242 material_id=4
+119: start=270103 end=270120 material_id=4
+120: start=286981 end=286998 material_id=4
+121: start=303859 end=303876 material_id=4
+122: start=320737 end=320754 material_id=5
+123: start=337615 end=337632 material_id=5
+124: start=354493 end=354510 material_id=5
+125: start=371371 end=371388 material_id=5
+126: start=388249 end=388266 material_id=5
+127: start=405127 end=405144 material_id=5
+128: start=422005 end=422022 material_id=5
+129: start=438883 end=438900 material_id=5
+130: start=455761 end=455778 material_id=5
+131: start=472639 end=472656 material_id=5
+132: start=489517 end=489534 material_id=5
+133: start=506395 end=506412 material_id=5
+134: start=523273 end=523290 material_id=5
+135: start=540151 end=540168 material_id=5
+136: start=557029 end=557046 material_id=5
+137: start=73 end=16878 material_id=6
+138: start=16951 end=33756 material_id=6
+139: start=33829 end=50634 material_id=6
+140: start=50707 end=67512 material_id=6
+141: start=67585 end=84390 material_id=6
+142: start=84463 end=101268 material_id=6
+143: start=101341 end=118146 material_id=6
+144: start=118219 end=135024 material_id=6
+145: start=135097 end=151902 material_id=6
+146: start=151975 end=168780 material_id=6
+147: start=168853 end=185658 material_id=6
+148: start=185731 end=202536 material_id=6
+149: start=202609 end=219414 material_id=6
+150: start=219487 end=236292 material_id=6
+151: start=236365 end=253170 material_id=6
+152: start=253243 end=270048 material_id=6
+153: start=270121 end=286926 material_id=6
+154: start=286999 end=303804 material_id=5
+155: start=303877 end=320682 material_id=5
+156: start=320755 end=337560 material_id=5
+157: start=337633 end=354438 material_id=5
+158: start=354511 end=371316 material_id=5
+159: start=371389 end=388194 material_id=5
+160: start=388267 end=405072 material_id=5
+161: start=405145 end=421950 material_id=5
+162: start=422023 end=438828 material_id=5
+163: start=438901 end=455706 material_id=5
+164: start=455779 end=472584 material_id=5
+165: start=472657 end=489462 material_id=5
+166: start=489535 end=506340 material_id=5
+167: start=506413 end=523218 material_id=5
+168: start=523291 end=540096 material_id=5
+169: start=540169 end=556974 material_id=5
+170: start=557047 end=573852 material_id=5
