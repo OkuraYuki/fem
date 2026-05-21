@@ -433,6 +433,7 @@ void ElectrostaticAnalyzer::read_material_and_bc(const char *filename)
 		for (size_t e = 0; e < elements.size(); ++e) {
 			elements[e].material = 0;
 		}
+		input_quality.material_fallback_elements += (int)elements.size();
 		printf("No material block ranges found; fallback to first material (material_id=1, index=0) for all elements.\n");
 	}
 
@@ -618,7 +619,6 @@ void ElectrostaticAnalyzer::assemble_global_matrix()
 	global_F.assign(n, 0.0);
 	input_quality.negative_jacobian_elements = 0;
 	input_quality.degenerate_elements = 0;
-	input_quality.material_fallback_elements = 0;
 
 	for (size_t e = 0; e < elements.size(); ++e) {
 		const Element &el = elements[e];
@@ -705,6 +705,9 @@ void ElectrostaticAnalyzer::assemble_global_matrix()
 
 	build_sparse_matrix();
 
+	if (input_quality.material_fallback_elements > 0) {
+		printf("Warning: material fallback applied to %d elements.\n", input_quality.material_fallback_elements);
+	}
 	printf("Assembled sparse global matrix: %dx%d, nnz=%d\n", n, n, (int)global_K_values.size());
 }
 
@@ -856,7 +859,7 @@ void ElectrostaticAnalyzer::solve()
 		global_K_row_ptr.swap(step_row_ptr);
 		global_K_col_idx.swap(step_col_idx);
 		global_K_values.swap(step_values);
-		if (step == 0 || step + 1 == nstep) {
+		if (step == 0 || step + 1 == nstep || ((step + 1) % 50 == 0)) {
 			last_matrix_diagnostics = analyze_matrix(global_K_row_ptr, global_K_col_idx, global_K_values);
 			log_matrix_diagnostics("step_matrix", step + 1);
 		}

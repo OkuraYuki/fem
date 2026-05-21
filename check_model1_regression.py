@@ -33,6 +33,7 @@ def main() -> int:
         fail(f"missing final step output: {tempa}")
 
     stats = parse_summary(summary)
+    # This regression is intentionally pinned to model_1's current nstep=10 setup.
     if int(stats.get("final_step", "0")) != 10:
         fail(f"unexpected final_step: {stats.get('final_step')}")
 
@@ -46,7 +47,7 @@ def main() -> int:
 
     vals = []
     for t in tokens:
-        # Fortran-style scientific notation compatibility (e.g., 1.23D+05 -> 1.23E+05).
+        # Fortran DOUBLE PRECISION notation compatibility (e.g., 1.23D+05 -> 1.23E+05).
         v = float(t.replace("D", "E"))
         if not math.isfinite(v):
             fail("non-finite value found in tempa.dat010")
