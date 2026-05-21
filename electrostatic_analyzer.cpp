@@ -433,7 +433,7 @@ void ElectrostaticAnalyzer::read_material_and_bc(const char *filename)
 		for (size_t e = 0; e < elements.size(); ++e) {
 			elements[e].material = 0;
 		}
-		printf("No material block ranges found; fallback to material_id=1 for all elements.\n");
+		printf("No material block ranges found; fallback to first material (material_id=1, index=0) for all elements.\n");
 	}
 
 	// initialize materials with defaults (sigma = 1, epsilon = 1)
@@ -745,7 +745,6 @@ void ElectrostaticAnalyzer::solve_linear_system()
 	if (rsold < tol * tol) {
 		potentials = x;
 		last_cg_converged = true;
-		printf("Converged at iteration 0\n");
 		printf("CG summary: iterations=0, final_residual=%.6e, converged=yes\n", last_cg_final_residual);
 		return;
 	}
@@ -820,10 +819,12 @@ void ElectrostaticAnalyzer::solve()
 	}
 
 	collect_input_quality_stats();
-	printf("Input quality: invalid_connectivity_elements=%d, invalid_connectivity_refs=%d, isolated_nodes=%d, unassigned_material_elements=%d, invalid_bc_nodes=%d, invalid_material_ranges=%d, invalid_material_ids=%d\n",
+	printf("Input quality:\n");
+	printf("  invalid_connectivity_elements=%d, invalid_connectivity_refs=%d, isolated_nodes=%d\n",
 		input_quality.invalid_connectivity_elements,
 		input_quality.invalid_connectivity_references,
-		input_quality.isolated_nodes,
+		input_quality.isolated_nodes);
+	printf("  unassigned_material_elements=%d, invalid_bc_nodes=%d, invalid_material_ranges=%d, invalid_material_ids=%d\n",
 		input_quality.unassigned_material_elements,
 		input_quality.invalid_boundary_nodes,
 		input_quality.invalid_material_block_ranges,

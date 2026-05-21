@@ -9,7 +9,7 @@ from pathlib import Path
 
 def fail(msg: str) -> None:
     print(f"[FAIL] {msg}")
-    sys.exit(1)
+    raise RuntimeError(msg)
 
 
 def parse_summary(path: Path) -> dict:
@@ -46,6 +46,7 @@ def main() -> int:
 
     vals = []
     for t in tokens:
+        # Fortran-style scientific notation compatibility (e.g., 1.23D+05 -> 1.23E+05).
         v = float(t.replace("D", "E"))
         if not math.isfinite(v):
             fail("non-finite value found in tempa.dat010")
@@ -66,4 +67,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except RuntimeError:
+        raise SystemExit(1)
