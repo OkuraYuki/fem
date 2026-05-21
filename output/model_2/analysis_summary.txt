@@ -21,12 +21,12 @@ material_fallback_elements: 0
 
 Analysis Conditions
 -------------------
-dt: 1.500000e-20
-nstep(max): 500
+dt: 1.000000e-03
+nstep(max): 1000
 convergence_tolerance: 1.000000e-08
-final_step: 1
-final_time: 1.500000e-20
-final_max_diff: 1.408988e-12
+final_step: 3
+final_time: 3.000000e-03
+final_max_diff: 5.971368e-11
 converged_early: yes
 
 Pre-solve Summary
@@ -39,19 +39,19 @@ material_2_elements: 744
 
 Linear Solver Diagnostics
 -------------------------
-cg_iterations_last_step: 96
-cg_initial_residual_last_step: 6.462138e-01
-cg_final_residual_last_step: 9.679770e-11
+cg_iterations_last_step: 1
+cg_initial_residual_last_step: 1.184431e-10
+cg_final_residual_last_step: 8.898348e-11
 cg_converged_last_step: yes
 
 Matrix Diagnostics (latest)
 ---------------------------
-nnz: 2409
+nnz: 2408
 max_row_nnz: 17
 zero_diag_count: 0
-min_abs_diag: 4.342222e+09
-max_abs_diag: 1.066667e+12
-max_abs_value: 1.066667e+12
+min_abs_diag: 6.000067e-02
+max_abs_diag: 2.900000e+09
+max_abs_value: 2.900000e+09
 
 Boundary Conditions
 -------------------

@@ -6,6 +6,19 @@ Mesh
 Nodes: 216
 Elements: 750
 
+Input Quality Checks
+--------------------
+invalid_connectivity_elements: 0
+invalid_connectivity_references: 0
+isolated_nodes: 0
+invalid_boundary_nodes: 0
+invalid_material_block_ranges: 0
+invalid_material_ids: 0
+unassigned_material_elements: 0
+negative_jacobian_elements: 0
+degenerate_elements: 0
+material_fallback_elements: 0
+
 Analysis Conditions
 -------------------
 dt: 1.000000e-03
@@ -15,6 +28,30 @@ final_step: 3
 final_time: 3.000000e-03
 final_max_diff: 5.971368e-11
 converged_early: yes
+
+Pre-solve Summary
+-----------------
+fixed_nodes: 8
+boundary_type_count: 0
+materials_with_elements: 2
+material_1_elements: 6
+material_2_elements: 744
+
+Linear Solver Diagnostics
+-------------------------
+cg_iterations_last_step: 1
+cg_initial_residual_last_step: 1.184431e-10
+cg_final_residual_last_step: 8.898348e-11
+cg_converged_last_step: yes
+
+Matrix Diagnostics (latest)
+---------------------------
+nnz: 2408
+max_row_nnz: 17
+zero_diag_count: 0
+min_abs_diag: 6.000067e-02
+max_abs_diag: 2.900000e+09
+max_abs_value: 2.900000e+09
 
 Boundary Conditions
 -------------------
