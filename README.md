@@ -251,6 +251,11 @@ g++ -std=c++11 main.cpp electrostatic_analyzer.cpp -o fem.exe
 ./fem.exe models.dat model_2
 ```
 
+### 回帰チェック（model_1）
+```bash
+python3 check_model1_regression.py
+```
+
 ---
 
 ## 新しいモデル追加手順

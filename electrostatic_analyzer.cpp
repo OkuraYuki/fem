@@ -5,6 +5,8 @@
 #include <cmath>
 #include <cstring>
 #include <algorithm>
+#include <limits>
+#include <map>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -16,8 +18,13 @@ ElectrostaticAnalyzer::ElectrostaticAnalyzer()
 	final_time = 0.0;
 	final_max_diff = 0.0;
 	converged_early = false;
+	last_cg_iterations = 0;
+	last_cg_initial_residual = 0.0;
+	last_cg_final_residual = 0.0;
+	last_cg_converged = false;
 	step_output_prefix = "tempa.dat";
 	report_output_path = "analysis_summary.txt";
+	fixed_node_count = 0;
 }
 
 void ElectrostaticAnalyzer::set_output_paths(const std::string &step_prefix, const std::string &report_path)
@@ -142,8 +149,121 @@ void ElectrostaticAnalyzer::matvec_csr(const std::vector<int> &row_ptr, const st
 	}
 }
 
+void ElectrostaticAnalyzer::collect_input_quality_stats()
+{
+	input_quality.invalid_connectivity_elements = 0;
+	input_quality.invalid_connectivity_references = 0;
+	input_quality.isolated_nodes = 0;
+	input_quality.invalid_boundary_nodes = 0;
+	input_quality.unassigned_material_elements = 0;
+
+	std::vector<int> node_usage(nodes.size(), 0);
+	for (size_t e = 0; e < elements.size(); ++e) {
+		bool valid = true;
+		for (int k = 0; k < 4; ++k) {
+			const int n = elements[e].nodes[k];
+			if (n < 0 || n >= (int)nodes.size()) {
+				++input_quality.invalid_connectivity_references;
+				valid = false;
+			} else {
+				++node_usage[n];
+			}
+		}
+		if (!valid) ++input_quality.invalid_connectivity_elements;
+		if (elements[e].material < 0 || elements[e].material >= (int)materials.size()) {
+			++input_quality.unassigned_material_elements;
+		}
+	}
+
+	for (size_t i = 0; i < node_usage.size(); ++i) {
+		if (node_usage[i] == 0) ++input_quality.isolated_nodes;
+	}
+
+	for (size_t i = 0; i < boundaries.size(); ++i) {
+		const BoundaryCondition &bc = boundaries[i];
+		if (bc.node1 < 0 || bc.node1 >= (int)nodes.size()) ++input_quality.invalid_boundary_nodes;
+		if (bc.node2 < 0 || bc.node2 >= (int)nodes.size()) ++input_quality.invalid_boundary_nodes;
+	}
+}
+
+void ElectrostaticAnalyzer::collect_pre_solve_summary()
+{
+	fixed_node_count = 0;
+	for (size_t i = 0; i < fixed_node.size(); ++i) {
+		if (fixed_node[i]) ++fixed_node_count;
+	}
+
+	std::map<int, int> bc_hist;
+	for (size_t i = 0; i < boundaries.size(); ++i) {
+		++bc_hist[boundaries[i].type];
+	}
+	boundary_type_counts.clear();
+	for (std::map<int, int>::const_iterator it = bc_hist.begin(); it != bc_hist.end(); ++it) {
+		boundary_type_counts.push_back(std::make_pair(it->first, it->second));
+	}
+
+	material_element_counts.assign(materials.size(), 0);
+	for (size_t e = 0; e < elements.size(); ++e) {
+		int mat = elements[e].material;
+		if (mat >= 0 && mat < (int)material_element_counts.size()) ++material_element_counts[mat];
+	}
+
+	printf("Pre-solve summary: fixed_nodes=%d, boundary_count=%d, material_count=%d\n",
+		fixed_node_count, (int)boundaries.size(), (int)materials.size());
+}
+
+MatrixDiagnostics ElectrostaticAnalyzer::analyze_matrix(const std::vector<int> &row_ptr,
+	const std::vector<int> &col_idx, const std::vector<double> &values) const
+{
+	MatrixDiagnostics stats;
+	stats.nnz = (int)values.size();
+	stats.min_abs_diag = std::numeric_limits<double>::infinity();
+
+	const int n = (int)nodes.size();
+	for (int r = 0; r < n; ++r) {
+		const int row_nnz = row_ptr[r + 1] - row_ptr[r];
+		if (row_nnz > stats.max_row_nnz) stats.max_row_nnz = row_nnz;
+
+		bool has_diag = false;
+		double diag_abs = 0.0;
+		for (int p = row_ptr[r]; p < row_ptr[r + 1]; ++p) {
+			double av = std::fabs(values[p]);
+			if (av > stats.max_abs_value) stats.max_abs_value = av;
+			if (col_idx[p] == r) {
+				has_diag = true;
+				diag_abs = av;
+			}
+		}
+
+		if (!has_diag || diag_abs <= 0.0) {
+			++stats.zero_diag_count;
+		} else {
+			if (diag_abs < stats.min_abs_diag) stats.min_abs_diag = diag_abs;
+			if (diag_abs > stats.max_abs_diag) stats.max_abs_diag = diag_abs;
+		}
+	}
+
+	if (!std::isfinite(stats.min_abs_diag)) stats.min_abs_diag = 0.0;
+	return stats;
+}
+
+void ElectrostaticAnalyzer::log_matrix_diagnostics(const char *label, int step) const
+{
+	printf("[%s][step=%d] nnz=%d, max_row_nnz=%d, zero_diag=%d, min|diag|=%.6e, max|diag|=%.6e, max|A|=%.6e\n",
+		label, step, last_matrix_diagnostics.nnz, last_matrix_diagnostics.max_row_nnz,
+		last_matrix_diagnostics.zero_diag_count, last_matrix_diagnostics.min_abs_diag,
+		last_matrix_diagnostics.max_abs_diag, last_matrix_diagnostics.max_abs_value);
+}
+
 void ElectrostaticAnalyzer::read_mesh(const char *filename)
 {
+	input_quality.invalid_connectivity_elements = 0;
+	input_quality.invalid_connectivity_references = 0;
+	input_quality.isolated_nodes = 0;
+	input_quality.negative_jacobian_elements = 0;
+	input_quality.degenerate_elements = 0;
+	input_quality.material_fallback_elements = 0;
+
 	FILE *fp = fopen(filename, "r");
 	if (!fp) {
 		printf("Cannot open %s\n", filename);
@@ -158,7 +278,7 @@ void ElectrostaticAnalyzer::read_mesh(const char *filename)
 		return;
 	}
 
-	elements.assign(num_elements, Element{{0, 0, 0, 0}, 0});
+	elements.assign(num_elements, Element{{0, 0, 0, 0}, -1});
 	for (int e = 0; e < num_elements; ++e) {
 		int n0 = 0, n1 = 0, n2 = 0, n3 = 0;
 		if (fscanf(fp, "%d %d %d %d", &n0, &n1, &n2, &n3) != 4) {
@@ -188,6 +308,11 @@ void ElectrostaticAnalyzer::read_mesh(const char *filename)
 
 void ElectrostaticAnalyzer::read_material_and_bc(const char *filename)
 {
+	input_quality.invalid_boundary_nodes = 0;
+	input_quality.invalid_material_block_ranges = 0;
+	input_quality.invalid_material_ids = 0;
+	input_quality.unassigned_material_elements = 0;
+
 	FILE *fp = fopen(filename, "r");
 	if (!fp) {
 		printf("Cannot open %s\n", filename);
@@ -290,12 +415,25 @@ void ElectrostaticAnalyzer::read_material_and_bc(const char *filename)
 		int end = vals[1];
 		int mat = vals[2];
 		int mat_id = mat - 1; // 1-based -> 0-based
+		if (start > end || start < 1 || end > (int)elements.size()) {
+			++input_quality.invalid_material_block_ranges;
+		}
+		if (mat_id < 0 || mat_id >= ntmate) {
+			++input_quality.invalid_material_ids;
+		}
 		material_ranges.push_back(MaterialBlockRange{start, end, mat_id});
 		for (int e = start - 1; e <= end - 1; ++e) {
 			if (0 <= e && e < (int)elements.size()) {
 				elements[e].material = mat_id;
 			}
 		}
+	}
+
+	if (ntmblk == 0 && ntmate > 0) {
+		for (size_t e = 0; e < elements.size(); ++e) {
+			elements[e].material = 0;
+		}
+		printf("No material block ranges found; fallback to material_id=1 for all elements.\n");
 	}
 
 	// initialize materials with defaults (sigma = 1, epsilon = 1)
@@ -367,6 +505,7 @@ void ElectrostaticAnalyzer::read_initial_potential(const char *filename)
 
 	fixed_node.assign(nodes.size(), false);
 	fixed_value.assign(nodes.size(), 0.0);
+	fixed_materials.clear();
 
 	int ninit = 0;
 	if (fscanf(fp, "%d", &ninit) != 1) {
@@ -477,6 +616,9 @@ void ElectrostaticAnalyzer::assemble_global_matrix()
 	global_K_rows.assign(n, {});
 	global_E_rows.assign(n, {});
 	global_F.assign(n, 0.0);
+	input_quality.negative_jacobian_elements = 0;
+	input_quality.degenerate_elements = 0;
+	input_quality.material_fallback_elements = 0;
 
 	for (size_t e = 0; e < elements.size(); ++e) {
 		const Element &el = elements[e];
@@ -498,7 +640,11 @@ void ElectrostaticAnalyzer::assemble_global_matrix()
 					- J[0][1] * (J[1][0] * J[2][2] - J[1][2] * J[2][0])
 					+ J[0][2] * (J[1][0] * J[2][1] - J[1][1] * J[2][0]);
 
-		if (std::fabs(detJ) < 1e-20) continue;
+		if (detJ < 0.0) ++input_quality.negative_jacobian_elements;
+		if (std::fabs(detJ) < 1e-20) {
+			++input_quality.degenerate_elements;
+			continue;
+		}
 
 		double invJ[3][3];
 		invJ[0][0] = (J[1][1] * J[2][2] - J[1][2] * J[2][1]) / detJ;
@@ -528,7 +674,10 @@ void ElectrostaticAnalyzer::assemble_global_matrix()
 		}
 
 		int mat = el.material;
-		if (mat < 0 || mat >= (int)materials.size()) mat = 0;
+		if (mat < 0 || mat >= (int)materials.size()) {
+			mat = 0;
+			++input_quality.material_fallback_elements;
+		}
 		const Material &M = materials[mat];
 
 		double volume = std::fabs(detJ) / 6.0;
@@ -588,10 +737,16 @@ void ElectrostaticAnalyzer::solve_linear_system()
 	};
 
 	double rsold = dot(r, r);
+	last_cg_initial_residual = std::sqrt(rsold);
+	last_cg_final_residual = last_cg_initial_residual;
+	last_cg_iterations = 0;
+	last_cg_converged = false;
+	printf("CG start: initial_residual=%.6e, tol=%.1e, max_iter=%d\n", last_cg_initial_residual, tol, max_iter);
 	if (rsold < tol * tol) {
 		potentials = x;
+		last_cg_converged = true;
 		printf("Converged at iteration 0\n");
-		printf("Solved linear system with Conjugate Gradient\n");
+		printf("CG summary: iterations=0, final_residual=%.6e, converged=yes\n", last_cg_final_residual);
 		return;
 	}
 
@@ -613,7 +768,12 @@ void ElectrostaticAnalyzer::solve_linear_system()
 
 		double rsnew = dot(r, r);
 		iter_done = iter + 1;
+		last_cg_final_residual = std::sqrt(rsnew);
+		if (iter_done == 1 || iter_done % 50 == 0) {
+			printf("CG iter %d: residual=%.6e\n", iter_done, last_cg_final_residual);
+		}
 		if (std::sqrt(rsnew) < tol) {
+			last_cg_converged = true;
 			printf("Converged at iteration %d\n", iter_done);
 			break;
 		}
@@ -626,11 +786,13 @@ void ElectrostaticAnalyzer::solve_linear_system()
 	}
 
 	potentials = x;
+	last_cg_iterations = iter_done;
 	for (int i = 0; i < n; ++i) {
 		if (fixed_node[i]) potentials[i] = fixed_value[i];
 	}
 
-	printf("Solved linear system with Conjugate Gradient\n");
+	printf("CG summary: iterations=%d, final_residual=%.6e, converged=%s\n",
+		last_cg_iterations, last_cg_final_residual, last_cg_converged ? "yes" : "no");
 }
 
 void ElectrostaticAnalyzer::solve()
@@ -641,6 +803,10 @@ void ElectrostaticAnalyzer::solve()
 	final_time = 0.0;
 	final_max_diff = 0.0;
 	converged_early = false;
+	boundary_type_counts.clear();
+	material_element_counts.clear();
+	fixed_node_count = 0;
+	last_matrix_diagnostics = MatrixDiagnostics();
 
 	potentials.assign(nodes.size(), 0.0);
 	if (fixed_node.size() != nodes.size()) {
@@ -653,6 +819,16 @@ void ElectrostaticAnalyzer::solve()
 		return;
 	}
 
+	collect_input_quality_stats();
+	printf("Input quality: invalid_connectivity_elements=%d, invalid_connectivity_refs=%d, isolated_nodes=%d, unassigned_material_elements=%d, invalid_bc_nodes=%d, invalid_material_ranges=%d, invalid_material_ids=%d\n",
+		input_quality.invalid_connectivity_elements,
+		input_quality.invalid_connectivity_references,
+		input_quality.isolated_nodes,
+		input_quality.unassigned_material_elements,
+		input_quality.invalid_boundary_nodes,
+		input_quality.invalid_material_block_ranges,
+		input_quality.invalid_material_ids);
+
 	apply_boundary_conditions();
 	if (std::none_of(fixed_node.begin(), fixed_node.end(), [](bool v) { return v; })) {
 		// 境界固定が無い場合は基準点を1つだけ 0V に固定して特異性を避ける
@@ -663,6 +839,7 @@ void ElectrostaticAnalyzer::solve()
 			printf("No fixed nodes found; node 1 is used as a reference potential (0.0V)\n");
 		}
 	}
+	collect_pre_solve_summary();
 	assemble_global_matrix();
 	std::vector<double> base_F = global_F;
 	printf("Transient solve: dt=%.3e, nstep=%d\n", dt, nstep);
@@ -678,6 +855,10 @@ void ElectrostaticAnalyzer::solve()
 		global_K_row_ptr.swap(step_row_ptr);
 		global_K_col_idx.swap(step_col_idx);
 		global_K_values.swap(step_values);
+		if (step == 0 || step + 1 == nstep) {
+			last_matrix_diagnostics = analyze_matrix(global_K_row_ptr, global_K_col_idx, global_K_values);
+			log_matrix_diagnostics("step_matrix", step + 1);
+		}
 
 		global_F = base_F;
 		std::vector<double> eps_phi;
@@ -739,6 +920,19 @@ void ElectrostaticAnalyzer::write_analysis_report(const char *filename) const
 	fprintf(fp, "Nodes: %d\n", (int)nodes.size());
 	fprintf(fp, "Elements: %d\n\n", (int)elements.size());
 
+	fprintf(fp, "Input Quality Checks\n");
+	fprintf(fp, "--------------------\n");
+	fprintf(fp, "invalid_connectivity_elements: %d\n", input_quality.invalid_connectivity_elements);
+	fprintf(fp, "invalid_connectivity_references: %d\n", input_quality.invalid_connectivity_references);
+	fprintf(fp, "isolated_nodes: %d\n", input_quality.isolated_nodes);
+	fprintf(fp, "invalid_boundary_nodes: %d\n", input_quality.invalid_boundary_nodes);
+	fprintf(fp, "invalid_material_block_ranges: %d\n", input_quality.invalid_material_block_ranges);
+	fprintf(fp, "invalid_material_ids: %d\n", input_quality.invalid_material_ids);
+	fprintf(fp, "unassigned_material_elements: %d\n", input_quality.unassigned_material_elements);
+	fprintf(fp, "negative_jacobian_elements: %d\n", input_quality.negative_jacobian_elements);
+	fprintf(fp, "degenerate_elements: %d\n", input_quality.degenerate_elements);
+	fprintf(fp, "material_fallback_elements: %d\n\n", input_quality.material_fallback_elements);
+
 	fprintf(fp, "Analysis Conditions\n");
 	fprintf(fp, "-------------------\n");
 	fprintf(fp, "dt: %.6e\n", dt);
@@ -748,6 +942,35 @@ void ElectrostaticAnalyzer::write_analysis_report(const char *filename) const
 	fprintf(fp, "final_time: %.6e\n", final_time);
 	fprintf(fp, "final_max_diff: %.6e\n", final_max_diff);
 	fprintf(fp, "converged_early: %s\n\n", converged_early ? "yes" : "no");
+
+	fprintf(fp, "Pre-solve Summary\n");
+	fprintf(fp, "-----------------\n");
+	fprintf(fp, "fixed_nodes: %d\n", fixed_node_count);
+	fprintf(fp, "boundary_type_count: %d\n", (int)boundary_type_counts.size());
+	for (size_t i = 0; i < boundary_type_counts.size(); ++i) {
+		fprintf(fp, "boundary_type_%d: %d\n", boundary_type_counts[i].first, boundary_type_counts[i].second);
+	}
+	fprintf(fp, "materials_with_elements: %d\n", (int)material_element_counts.size());
+	for (size_t i = 0; i < material_element_counts.size(); ++i) {
+		fprintf(fp, "material_%zu_elements: %d\n", i + 1, material_element_counts[i]);
+	}
+	fprintf(fp, "\n");
+
+	fprintf(fp, "Linear Solver Diagnostics\n");
+	fprintf(fp, "-------------------------\n");
+	fprintf(fp, "cg_iterations_last_step: %d\n", last_cg_iterations);
+	fprintf(fp, "cg_initial_residual_last_step: %.6e\n", last_cg_initial_residual);
+	fprintf(fp, "cg_final_residual_last_step: %.6e\n", last_cg_final_residual);
+	fprintf(fp, "cg_converged_last_step: %s\n\n", last_cg_converged ? "yes" : "no");
+
+	fprintf(fp, "Matrix Diagnostics (latest)\n");
+	fprintf(fp, "---------------------------\n");
+	fprintf(fp, "nnz: %d\n", last_matrix_diagnostics.nnz);
+	fprintf(fp, "max_row_nnz: %d\n", last_matrix_diagnostics.max_row_nnz);
+	fprintf(fp, "zero_diag_count: %d\n", last_matrix_diagnostics.zero_diag_count);
+	fprintf(fp, "min_abs_diag: %.6e\n", last_matrix_diagnostics.min_abs_diag);
+	fprintf(fp, "max_abs_diag: %.6e\n", last_matrix_diagnostics.max_abs_diag);
+	fprintf(fp, "max_abs_value: %.6e\n\n", last_matrix_diagnostics.max_abs_value);
 
 	fprintf(fp, "Boundary Conditions\n");
 	fprintf(fp, "-------------------\n");
