@@ -800,31 +800,29 @@ void ElectrostaticAnalyzer::write_potential_distribution(const char *filename)
 
 	auto format_e12_4 = [](double value) -> std::string {
 		char buf[64];
-		char temp[64];
-		// Output with 4 decimal places in scientific notation
-		snprintf(buf, sizeof(buf), "%.4E", value);
-		
-		// Find and adjust exponent to 2 digits (Fortran E12.4 format)
-		char *e_pos = strchr(buf, 'E');
-		if (e_pos) {
-			char exp_sign = *(e_pos + 1);
-			int exp_val = std::abs(atoi(e_pos + 2));
-			// Limit exponent to 2 digits for Fortran compatibility
-			if (exp_val > 99) exp_val = exp_val % 100;
-			snprintf(temp, sizeof(temp), "%.*sE%c%02d", (int)(e_pos - buf), buf, exp_sign, exp_val);
-			snprintf(buf, sizeof(buf), "%s", temp);
+		char out[64];
+
+		if (!std::isfinite(value)) {
+			value = 0.0;
 		}
-		
-		// Right-align to 12 characters
-		std::string result = buf;
-		while ((int)result.length() < 12) {
-			result = " " + result;
+
+		// Keep the formatted field within 12 characters.
+		// Values that would need a 3-digit exponent are treated as signed zero.
+		if (std::fabs(value) < 1.0e-99) {
+			std::snprintf(buf, sizeof(buf), "%s0.0000E+00", std::signbit(value) ? "-" : " ");
+		} else {
+			std::snprintf(buf, sizeof(buf), "%.4E", value);
+			char *e_pos = std::strchr(buf, 'E');
+			if (e_pos != nullptr) {
+				int exponent = std::atoi(e_pos + 1);
+				if (std::abs(exponent) > 99) {
+					std::snprintf(buf, sizeof(buf), "%s0.0000E+00", std::signbit(value) ? "-" : " ");
+				}
+			}
 		}
-		// Truncate to 12 if longer
-		if ((int)result.length() > 12) {
-			result = result.substr(0, 12);
-		}
-		return result;
+
+		std::snprintf(out, sizeof(out), "%12s", buf);
+		return std::string(out);
 	};
 
 	int col = 0;
