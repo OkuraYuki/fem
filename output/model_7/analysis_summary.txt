@@ -13,7 +13,7 @@ nstep(max): 200
 convergence_tolerance: 1.000000e-08
 final_step: 200
 final_time: 2.000000e-04
-final_max_diff: 2.549782e-04
+final_max_diff: 1.151074e-04
 converged_early: no
 
 Boundary Conditions
@@ -23,8 +23,21 @@ count: 0
 Fixed Materials (tmate.dat)
 ---------------------------
 count: 2
-1: material_id=1 value=-1.000000e+00
-2: material_id=2 value=1.000000e+00
+1: material_id=6 value=-1.000000e+00
+2: material_id=6 value=1.000000e+00
+
+Fixed Nodes: 27
+Sample fixed nodes (index:value)
+671: -1.000000e+00
+698: -1.000000e+00
+699: -1.000000e+00
+717: -1.000000e+00
+720: -1.000000e+00
+750: -1.000000e+00
+752: -1.000000e+00
+754: -1.000000e+00
+801: -1.000000e+00
+2171: 1.000000e+00
 
 Material Properties
 -------------------

@@ -39,6 +39,8 @@ struct FixedMaterialEntry {
 
 class ElectrostaticAnalyzer {
 private:
+	int mesh_node_count;
+	int mesh_element_count;
 	std::vector<Node> nodes;
 	std::vector<Element> elements;
 	std::vector<Material> materials;
@@ -74,6 +76,7 @@ private:
 	bool converged_early;
 	std::string step_output_prefix;
 	std::string report_output_path;
+	std::string material_file_path;
 
 	void add_fixed_node(int node, double value, bool overwrite);
 	void build_sparse_from_rows(const std::vector<std::vector<std::pair<int, double>>> &rows,
@@ -103,8 +106,8 @@ public:
 	void assemble_global_matrix();
 	void solve_linear_system();
 
-	int get_num_nodes() const { return (int)nodes.size(); }
-	int get_num_elements() const { return (int)elements.size(); }
+	int get_num_nodes() const { return mesh_node_count; }
+	int get_num_elements() const { return mesh_element_count; }
 	int get_boundary_count() const { return (int)boundaries.size(); }
 	int get_fixed_material_count() const { return (int)fixed_materials.size(); }
 	int get_material_range_count() const { return (int)material_ranges.size(); }

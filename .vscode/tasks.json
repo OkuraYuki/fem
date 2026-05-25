@@ -210,6 +210,142 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "test"
+		},
+		{
+			"label": "check fixed nodes model7",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"/tmp/check_fixed_nodes_model7.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "map fixed nodes",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"/tmp/map_fixed_nodes_to_materials.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "build fem_test",
+			"type": "shell",
+			"command": "g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem_test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "run model_7 after tmate fix",
+			"type": "shell",
+			"command": "./fem_test",
+			"args": [
+				"models.dat",
+				"model_7"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "build fem_test after patch",
+			"type": "shell",
+			"command": "g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem_test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "run model_7 after patch",
+			"type": "shell",
+			"command": "./fem_test",
+			"args": [
+				"models.dat",
+				"model_7"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "build fem_test debug report",
+			"type": "shell",
+			"command": "g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem_test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "run model_7 debug",
+			"type": "shell",
+			"command": "./fem_test",
+			"args": [
+				"models.dat",
+				"model_7"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "build fem_test with debug print",
+			"type": "shell",
+			"command": "g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem_test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "run model_7 to show debug fixed count",
+			"type": "shell",
+			"command": "./fem_test",
+			"args": [
+				"models.dat",
+				"model_7"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "build fem_test debug file",
+			"type": "shell",
+			"command": "g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem_test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "build fem_test after tmate priority change",
+			"type": "shell",
+			"command": "g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem_test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "run model_8 confirm",
+			"type": "shell",
+			"command": "./fem_test",
+			"args": [
+				"models.dat",
+				"model_8"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
 		}
 	]
 }

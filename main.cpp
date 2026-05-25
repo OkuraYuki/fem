@@ -118,6 +118,10 @@ static int run_one_model(const ModelSpec &spec, bool batch_mode, std::ofstream *
 
 	printf("=== Model: %s ===\n", spec.name.c_str());
 	analyzer.read_mesh(spec.mesh_file.c_str());
+	if (analyzer.get_num_nodes() <= 0 || analyzer.get_num_elements() <= 0) {
+		printf("Model '%s' was not loaded because the mesh is unavailable or too large.\n", spec.name.c_str());
+		return 1;
+	}
 	analyzer.read_material_and_bc(spec.material_file.c_str());
 	analyzer.read_initial_potential(spec.initial_file.c_str());
 	analyzer.read_analysis_config(spec.config_file.c_str());
@@ -163,15 +167,26 @@ int main(int argc, char **argv)
 			batch_csv << "model_name,mesh_file,material_file,initial_file,config_file,output_dir,nodes,elements,boundaries,fixed_materials,materials,final_step,final_time,final_max_diff,converged_early\n";
 		}
 
+		int matched = 0;
 		int ran = 0;
+		int failed = 0;
 		for (size_t i = 0; i < specs.size(); ++i) {
 			if (model_filter && specs[i].name != model_filter) continue;
-			run_one_model(specs[i], true, batch_csv.is_open() ? &batch_csv : nullptr);
-			++ran;
+			++matched;
+			if (run_one_model(specs[i], true, batch_csv.is_open() ? &batch_csv : nullptr) == 0) {
+				++ran;
+			} else {
+				++failed;
+			}
 		}
 
-		if (ran == 0) {
+		if (matched == 0) {
 			printf("No model matched the filter.\n");
+			return 1;
+		}
+
+		if (failed > 0) {
+			printf("Batch completed with %d failed model(s).\n", failed);
 			return 1;
 		}
 
