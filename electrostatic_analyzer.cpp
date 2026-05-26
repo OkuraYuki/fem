@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cctype>
 #include <cmath>
+#include <cstring>
 #include <algorithm>
 #include <sstream>
 #include <string>
@@ -797,9 +798,36 @@ void ElectrostaticAnalyzer::write_potential_distribution(const char *filename)
 		return;
 	}
 
+	auto format_e12_4 = [](double value) -> std::string {
+		char buf[64];
+		char out[64];
+
+		if (!std::isfinite(value)) {
+			value = 0.0;
+		}
+
+		// Keep the formatted field within 12 characters.
+		// Values that would need a 3-digit exponent are treated as signed zero.
+		if (std::fabs(value) < 1.0e-99) {
+			std::snprintf(buf, sizeof(buf), "%s0.0000E+00", std::signbit(value) ? "-" : " ");
+		} else {
+			std::snprintf(buf, sizeof(buf), "%.4E", value);
+			char *e_pos = std::strchr(buf, 'E');
+			if (e_pos != nullptr) {
+				int exponent = std::atoi(e_pos + 1);
+				if (std::abs(exponent) > 99) {
+					std::snprintf(buf, sizeof(buf), "%s0.0000E+00", std::signbit(value) ? "-" : " ");
+				}
+			}
+		}
+
+		std::snprintf(out, sizeof(out), "%12s", buf);
+		return std::string(out);
+	};
+
 	int col = 0;
 	for (size_t i = 0; i < potentials.size(); ++i) {
-		fprintf(fp, "%12.4E", potentials[i]);
+		fprintf(fp, "%s", format_e12_4(potentials[i]).c_str());
 		col++;
 		if (col == 6 || i + 1 == potentials.size()) {
 			fprintf(fp, "\n");

@@ -1,0 +1,136 @@
+Electrostatic FEM Analysis Summary
+=================================
+
+Mesh
+----
+Nodes: 132651
+Elements: 750000
+
+Analysis Conditions
+-------------------
+dt: 1.000000e-06
+nstep(max): 200
+convergence_tolerance: 1.000000e-08
+final_step: 43
+final_time: 4.300000e-05
+final_max_diff: 4.768033e-09
+converged_early: yes
+
+Boundary Conditions
+-------------------
+count: 0
+
+Fixed Materials (tmate.dat)
+---------------------------
+count: 1
+1: material_id=1 value=1.000000e+00
+
+Material Properties
+-------------------
+count: 2
+1: sigma=(5.800000e+07, 5.800000e+07, 5.800000e+07) epsilon=(8.900000e-12, 8.900000e-12, 8.900000e-12)
+2: sigma=(1.000000e-02, 1.000000e-02, 8.000000e-03) epsilon=(1.000000e-10, 1.000000e-10, 1.000000e-10)
+
+Material Block Ranges
+---------------------
+count: 100
+1: start=1 end=14994 material_id=2
+2: start=15001 end=29994 material_id=2
+3: start=30001 end=44994 material_id=2
+4: start=45001 end=59994 material_id=2
+5: start=60001 end=74994 material_id=2
+6: start=75001 end=89994 material_id=2
+7: start=90001 end=104994 material_id=2
+8: start=105001 end=119994 material_id=2
+9: start=120001 end=134994 material_id=2
+10: start=135001 end=149994 material_id=2
+11: start=150001 end=164994 material_id=2
+12: start=165001 end=179994 material_id=2
+13: start=180001 end=194994 material_id=2
+14: start=195001 end=209994 material_id=2
+15: start=210001 end=224994 material_id=2
+16: start=225001 end=239994 material_id=2
+17: start=240001 end=254994 material_id=2
+18: start=255001 end=269994 material_id=2
+19: start=270001 end=284994 material_id=2
+20: start=285001 end=299994 material_id=2
+21: start=300001 end=314994 material_id=2
+22: start=315001 end=329994 material_id=2
+23: start=330001 end=344994 material_id=2
+24: start=345001 end=359994 material_id=2
+25: start=360001 end=374994 material_id=2
+26: start=375001 end=389994 material_id=2
+27: start=390001 end=404994 material_id=2
+28: start=405001 end=419994 material_id=2
+29: start=420001 end=434994 material_id=2
+30: start=435001 end=449994 material_id=2
+31: start=450001 end=464994 material_id=2
+32: start=465001 end=479994 material_id=2
+33: start=480001 end=494994 material_id=2
+34: start=495001 end=509994 material_id=2
+35: start=510001 end=524994 material_id=2
+36: start=525001 end=539994 material_id=2
+37: start=540001 end=554994 material_id=2
+38: start=555001 end=569994 material_id=2
+39: start=570001 end=584994 material_id=2
+40: start=585001 end=599994 material_id=2
+41: start=600001 end=614994 material_id=2
+42: start=615001 end=629994 material_id=2
+43: start=630001 end=644994 material_id=2
+44: start=645001 end=659994 material_id=2
+45: start=660001 end=674994 material_id=2
+46: start=675001 end=689994 material_id=2
+47: start=690001 end=704994 material_id=2
+48: start=705001 end=719994 material_id=2
+49: start=720001 end=734994 material_id=2
+50: start=735001 end=749994 material_id=2
+51: start=14995 end=15000 material_id=1
+52: start=29995 end=30000 material_id=2
+53: start=44995 end=45000 material_id=2
+54: start=59995 end=60000 material_id=2
+55: start=74995 end=75000 material_id=2
+56: start=89995 end=90000 material_id=2
+57: start=104995 end=105000 material_id=2
+58: start=119995 end=120000 material_id=2
+59: start=134995 end=135000 material_id=2
+60: start=149995 end=150000 material_id=2
+61: start=164995 end=165000 material_id=2
+62: start=179995 end=180000 material_id=2
+63: start=194995 end=195000 material_id=2
+64: start=209995 end=210000 material_id=2
+65: start=224995 end=225000 material_id=2
+66: start=239995 end=240000 material_id=2
+67: start=254995 end=255000 material_id=2
+68: start=269995 end=270000 material_id=2
+69: start=284995 end=285000 material_id=2
+70: start=299995 end=300000 material_id=2
+71: start=314995 end=315000 material_id=2
+72: start=329995 end=330000 material_id=2
+73: start=344995 end=345000 material_id=2
+74: start=359995 end=360000 material_id=2
+75: start=374995 end=375000 material_id=2
+76: start=389995 end=390000 material_id=2
+77: start=404995 end=405000 material_id=2
+78: start=419995 end=420000 material_id=2
+79: start=434995 end=435000 material_id=2
+80: start=449995 end=450000 material_id=2
+81: start=464995 end=465000 material_id=2
+82: start=479995 end=480000 material_id=2
+83: start=494995 end=495000 material_id=2
+84: start=509995 end=510000 material_id=2
+85: start=524995 end=525000 material_id=2
+86: start=539995 end=540000 material_id=2
+87: start=554995 end=555000 material_id=2
+88: start=569995 end=570000 material_id=2
+89: start=584995 end=585000 material_id=2
+90: start=599995 end=600000 material_id=2
+91: start=614995 end=615000 material_id=2
+92: start=629995 end=630000 material_id=2
+93: start=644995 end=645000 material_id=2
+94: start=659995 end=660000 material_id=2
+95: start=674995 end=675000 material_id=2
+96: start=689995 end=690000 material_id=2
+97: start=704995 end=705000 material_id=2
+98: start=719995 end=720000 material_id=2
+99: start=734995 end=735000 material_id=2
+100: start=749995 end=750000 material_id=2
