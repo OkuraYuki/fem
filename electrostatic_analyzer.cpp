@@ -2,9 +2,11 @@
 
 #include <cstdio>
 #include <cctype>
+#include <cstdlib>
 #include <cmath>
 #include <cstring>
 #include <algorithm>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -367,6 +369,7 @@ void ElectrostaticAnalyzer::read_initial_potential(const char *filename)
 
 	fixed_node.assign(nodes.size(), false);
 	fixed_value.assign(nodes.size(), 0.0);
+	fixed_materials.clear();
 
 	int ninit = 0;
 	if (fscanf(fp, "%d", &ninit) != 1) {
@@ -375,23 +378,158 @@ void ElectrostaticAnalyzer::read_initial_potential(const char *filename)
 		return;
 	}
 
-	for (int i = 0; i < ninit; ++i) {
-		int mat_id_raw = 0;
-		double value = 0.0;
-		if (fscanf(fp, "%d %lf", &mat_id_raw, &value) != 2) break;
-		int mat_id = mat_id_raw - 1;
-		fixed_materials.push_back(FixedMaterialEntry{mat_id, value});
-		for (size_t e = 0; e < elements.size(); ++e) {
-			if (elements[e].material == mat_id) {
-				for (int k = 0; k < 4; ++k) {
-					add_fixed_node(elements[e].nodes[k], value, true);
-				}
+	auto to_upper = [](const std::string &text) -> std::string {
+		std::string upper = text;
+		for (char &c : upper) c = std::toupper((unsigned char)c);
+		return upper;
+	};
+
+	auto parse_double_token = [](const std::string &token, double &value) -> bool {
+		char *end = nullptr;
+		value = std::strtod(token.c_str(), &end);
+		return end != token.c_str() && *end == '\0';
+	};
+
+	auto parse_int_token = [](const std::string &token, int &value) -> bool {
+		char *end = nullptr;
+		long parsed = std::strtol(token.c_str(), &end, 10);
+		if (end == token.c_str() || *end != '\0') return false;
+		value = (int)parsed;
+		return true;
+	};
+
+	double xmin = std::numeric_limits<double>::max();
+	double xmax = std::numeric_limits<double>::lowest();
+	double ymin = std::numeric_limits<double>::max();
+	double ymax = std::numeric_limits<double>::lowest();
+	double zmin = std::numeric_limits<double>::max();
+	double zmax = std::numeric_limits<double>::lowest();
+	for (size_t i = 0; i < nodes.size(); ++i) {
+		xmin = std::min(xmin, nodes[i].x);
+		xmax = std::max(xmax, nodes[i].x);
+		ymin = std::min(ymin, nodes[i].y);
+		ymax = std::max(ymax, nodes[i].y);
+		zmin = std::min(zmin, nodes[i].z);
+		zmax = std::max(zmax, nodes[i].z);
+	}
+	const double min_face_tol = 1.0e-12;
+	const double rel_face_tol = 1.0e-9;
+	double xtol = std::max(min_face_tol, std::fabs(xmax - xmin) * rel_face_tol);
+	double ytol = std::max(min_face_tol, std::fabs(ymax - ymin) * rel_face_tol);
+	double ztol = std::max(min_face_tol, std::fabs(zmax - zmin) * rel_face_tol);
+
+	auto fix_nodes_on_face = [&](const std::string &selector, double value) -> int {
+		int axis = -1;
+		bool use_max = false;
+		if (selector == "XMIN") {
+			axis = 0;
+			use_max = false;
+		} else if (selector == "XMAX") {
+			axis = 0;
+			use_max = true;
+		} else if (selector == "YMIN") {
+			axis = 1;
+			use_max = false;
+		} else if (selector == "YMAX") {
+			axis = 1;
+			use_max = true;
+		} else if (selector == "ZMIN") {
+			axis = 2;
+			use_max = false;
+		} else if (selector == "ZMAX") {
+			axis = 2;
+			use_max = true;
+		}
+		if (axis < 0) return 0;
+
+		double target = 0.0;
+		double tol = 0.0;
+		if (axis == 0) {
+			target = use_max ? xmax : xmin;
+			tol = xtol;
+		} else if (axis == 1) {
+			target = use_max ? ymax : ymin;
+			tol = ytol;
+		} else {
+			target = use_max ? zmax : zmin;
+			tol = ztol;
+		}
+		int count = 0;
+		for (size_t i = 0; i < nodes.size(); ++i) {
+			double coord = 0.0;
+			if (axis == 0) coord = nodes[i].x;
+			else if (axis == 1) coord = nodes[i].y;
+			else coord = nodes[i].z;
+			if (std::fabs(coord - target) <= tol) {
+				add_fixed_node((int)i, value, true);
+				++count;
 			}
 		}
+		return count;
+	};
+
+	char linebuf[1024];
+	int ch = 0;
+	do {
+		ch = std::fgetc(fp);
+	} while (ch != '\n' && ch != EOF);
+
+	int processed = 0;
+	int loaded = 0;
+	while (processed < ninit && std::fgets(linebuf, sizeof(linebuf), fp)) {
+		std::string line(linebuf);
+		const size_t comment_pos = line.find('#');
+		if (comment_pos != std::string::npos) line = line.substr(0, comment_pos);
+		std::istringstream iss(line);
+		std::string token1;
+		if (!(iss >> token1)) continue;
+		++processed;
+
+		std::string token2;
+		if (!(iss >> token2)) {
+			printf("Missing value token at initial potential entry %d in %s\n", processed, filename);
+			continue;
+		}
+
+		std::string selector;
+		double value = 0.0;
+		if (to_upper(token1) == "FACE") {
+			selector = to_upper(token2);
+			std::string token3;
+			if (!(iss >> token3) || !parse_double_token(token3, value)) {
+				printf("Missing or invalid potential value for FACE entry %d in %s\n", processed, filename);
+				continue;
+			}
+		} else if (parse_double_token(token2, value)) {
+			int mat_id_raw = 0;
+			if (parse_int_token(token1, mat_id_raw)) {
+				int mat_id = mat_id_raw - 1;
+				fixed_materials.push_back(FixedMaterialEntry{mat_id, value});
+				for (size_t e = 0; e < elements.size(); ++e) {
+					if (elements[e].material == mat_id) {
+						for (int k = 0; k < 4; ++k) {
+							add_fixed_node(elements[e].nodes[k], value, true);
+						}
+					}
+				}
+				++loaded;
+				continue;
+			}
+			selector = to_upper(token1);
+		} else {
+			printf("Unable to parse potential value at initial potential entry %d in %s\n", processed, filename);
+			continue;
+		}
+
+		int face_count = fix_nodes_on_face(selector, value);
+		if (face_count == 0) {
+			printf("Warning: no nodes matched face selector '%s' in %s\n", selector.c_str(), filename);
+		}
+		++loaded;
 	}
 
 	fclose(fp);
-	printf("Read initial potential: %d entries\n", ninit);
+	printf("Read initial potential: %d entries\n", loaded);
 }
 
 void ElectrostaticAnalyzer::read_analysis_config(const char *filename)
