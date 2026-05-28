@@ -7,15 +7,19 @@
 #include <algorithm>
 #include <sstream>
 #include <string>
+#include <chrono>
 #include <vector>
 
 ElectrostaticAnalyzer::ElectrostaticAnalyzer()
-	: dt(0.0), nstep(200), unit(1.0)
+	: mesh_node_count(0), mesh_element_count(0), dt(0.0), nstep(200), unit(1.0)
 {
 	final_step = 0;
 	final_time = 0.0;
 	final_max_diff = 0.0;
 	converged_early = false;
+	last_solver_iterations = 0;
+	last_solver_time = 0.0;
+	last_solver_method = "ICCG";
 	step_output_prefix = "tempa.dat";
 	report_output_path = "analysis_summary.txt";
 }
@@ -70,39 +74,85 @@ void ElectrostaticAnalyzer::build_sparse_from_rows(const std::vector<std::vector
 void ElectrostaticAnalyzer::build_time_step_matrix(double scale_eps,
 	std::vector<int> &row_ptr, std::vector<int> &col_idx, std::vector<double> &values) const
 {
+	auto t_start = std::chrono::high_resolution_clock::now();
 	const int n = (int)nodes.size();
-	std::vector<std::vector<std::pair<int, double>>> rows(n);
-	for (int r = 0; r < n; ++r) {
-		rows[r] = global_K_rows[r];
-		for (const std::pair<int, double> &entry : global_E_rows[r]) {
-			rows[r].push_back(std::make_pair(entry.first, entry.second * scale_eps));
-		}
+	row_ptr.assign(n + 1, 0);
+	col_idx.clear();
+	values.clear();
+	if (n == 0) {
+		return;
 	}
-	build_sparse_from_rows(rows, row_ptr, col_idx, values);
+
+	// global_K/global_E are already sorted and aggregated by column per row.
+	// Merge them directly to avoid per-step row copies and sorting.
+	for (int r = 0; r < n; ++r) {
+		int pK = global_K_row_ptr[r];
+		int pKEnd = global_K_row_ptr[r + 1];
+		int pE = global_E_row_ptr[r];
+		int pEEnd = global_E_row_ptr[r + 1];
+
+		while (pK < pKEnd || pE < pEEnd) {
+			int c;
+			double v;
+			if (pE >= pEEnd || (pK < pKEnd && global_K_col_idx[pK] < global_E_col_idx[pE])) {
+				c = global_K_col_idx[pK];
+				v = global_K_values[pK];
+				++pK;
+			} else if (pK >= pKEnd || global_E_col_idx[pE] < global_K_col_idx[pK]) {
+				c = global_E_col_idx[pE];
+				v = global_E_values[pE] * scale_eps;
+				++pE;
+			} else {
+				c = global_K_col_idx[pK];
+				v = global_K_values[pK] + global_E_values[pE] * scale_eps;
+				++pK;
+				++pE;
+			}
+
+			if (std::fabs(v) > 1e-30) {
+				col_idx.push_back(c);
+				values.push_back(v);
+			}
+		}
+		row_ptr[r + 1] = (int)col_idx.size();
+	}
+
+	auto t_end = std::chrono::high_resolution_clock::now();
+	double elapsed = std::chrono::duration<double>(t_end - t_start).count();
+	printf("build_time_step_matrix (scale=%.6e): %.6f s\n", scale_eps, elapsed);
 }
 
 void ElectrostaticAnalyzer::build_sparse_matrix()
 {
+	auto t_start = std::chrono::high_resolution_clock::now();
 	build_sparse_from_rows(global_K_rows, global_K_row_ptr, global_K_col_idx, global_K_values);
 	build_sparse_from_rows(global_E_rows, global_E_row_ptr, global_E_col_idx, global_E_values);
+
+	auto t_end = std::chrono::high_resolution_clock::now();
+	double elapsed = std::chrono::duration<double>(t_end - t_start).count();
+	printf("build_sparse_matrix: %.6f s\n", elapsed);
 }
 
 void ElectrostaticAnalyzer::apply_dirichlet_constraints(std::vector<double> &rhs)
 {
 	const int n = (int)nodes.size();
-	for (int i = 0; i < n; ++i) {
-		if (!fixed_node[i]) continue;
-
-		for (int r = 0; r < n; ++r) {
-			for (int p = global_K_row_ptr[r]; p < global_K_row_ptr[r + 1]; ++p) {
-				if (global_K_col_idx[p] != i) continue;
-				if (r != i) {
-					rhs[r] -= global_K_values[p] * fixed_value[i];
+	// Single pass over CSR matrix: adjust rhs for fixed columns and zero non-diagonal
+	// entries that reference fixed nodes. This is O(nnz).
+	for (int r = 0; r < n; ++r) {
+		for (int p = global_K_row_ptr[r]; p < global_K_row_ptr[r + 1]; ++p) {
+			int c = global_K_col_idx[p];
+			if (fixed_node[c]) {
+				if (r != c) {
+					rhs[r] -= global_K_values[p] * fixed_value[c];
+					global_K_values[p] = 0.0;
 				}
-				global_K_values[p] = 0.0;
 			}
 		}
+	}
 
+	// Ensure diagonal entries for fixed nodes are 1.0 and other row entries are zero
+	for (int i = 0; i < n; ++i) {
+		if (!fixed_node[i]) continue;
 		bool has_diag = false;
 		for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
 			if (global_K_col_idx[p] == i) {
@@ -113,11 +163,10 @@ void ElectrostaticAnalyzer::apply_dirichlet_constraints(std::vector<double> &rhs
 			}
 		}
 		if (!has_diag) {
-			global_K_col_idx.insert(global_K_col_idx.begin() + global_K_row_ptr[i + 1], i);
-			global_K_values.insert(global_K_values.begin() + global_K_row_ptr[i + 1], 1.0);
-			for (int r = i + 1; r <= n; ++r) {
-				++global_K_row_ptr[r];
-			}
+			int insert_pos = global_K_row_ptr[i + 1];
+			global_K_col_idx.insert(global_K_col_idx.begin() + insert_pos, i);
+			global_K_values.insert(global_K_values.begin() + insert_pos, 1.0);
+			for (int r = i + 1; r <= n; ++r) ++global_K_row_ptr[r];
 		}
 		rhs[i] = fixed_value[i];
 	}
@@ -139,6 +188,245 @@ void ElectrostaticAnalyzer::matvec_csr(const std::vector<int> &row_ptr, const st
 			sum += values[p] * x[col_idx[p]];
 		}
 		y[r] = sum;
+	}
+}
+
+void ElectrostaticAnalyzer::build_incomplete_cholesky()
+{
+	const int n = (int)nodes.size();
+	ic_scale.assign(n, 1.0);
+	preconditioner_diag.assign(n, 0.0);
+	L_row_ptr.assign(n + 1, 0);
+	L_col_idx.clear();
+	L_values.clear();
+
+	// Symmetric diagonal scaling to reduce coefficient spread before IC(0).
+	const double shift = 1e-30;
+	for (int i = 0; i < n; ++i) {
+		double diag = 0.0;
+		for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
+			if (global_K_col_idx[p] == i) {
+				diag = global_K_values[p];
+				break;
+			}
+		}
+		if (!std::isfinite(diag) || diag <= shift) diag = 1.0;
+		preconditioner_diag[i] = diag;
+		ic_scale[i] = 1.0 / std::sqrt(diag);
+	}
+
+	// build pattern: keep columns <= row (lower triangle including diag)
+	for (int i = 0; i < n; ++i) {
+		for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
+			int c = global_K_col_idx[p];
+			if (c <= i) {
+				L_col_idx.push_back(c);
+				// placeholder for value
+				L_values.push_back(0.0);
+			}
+		}
+		L_row_ptr[i + 1] = (int)L_col_idx.size();
+	}
+
+	// helper to get A(i,j)
+	auto get_A = [&](int row, int col)->double{
+		for (int p = global_K_row_ptr[row]; p < global_K_row_ptr[row+1]; ++p) {
+			if (global_K_col_idx[p] == col) return ic_scale[row] * global_K_values[p] * ic_scale[col];
+		}
+		return 0.0;
+	};
+
+	// numeric IC(0)
+	for (int i = 0; i < n; ++i) {
+		// process off-diagonals j < i
+		for (int p = L_row_ptr[i]; p < L_row_ptr[i+1]; ++p) {
+			int j = L_col_idx[p];
+			if (j == i) continue;
+			double val = get_A(i, j);
+
+			// compute sum_k L(i,k)*L(j,k) for k < j
+			int pi = L_row_ptr[i];
+			int pj = L_row_ptr[j];
+			while (pi < L_row_ptr[i+1] && pj < L_row_ptr[j+1]) {
+				int ki = L_col_idx[pi];
+				int kj = L_col_idx[pj];
+				if (ki < kj) ++pi;
+				else if (ki > kj) ++pj;
+				else {
+					if (ki < j) {
+						val -= L_values[pi] * L_values[pj];
+					}
+					++pi; ++pj;
+				}
+			}
+
+			// find L_jj (diagonal of j)
+			double Ljj = 0.0;
+			for (int q = L_row_ptr[j]; q < L_row_ptr[j+1]; ++q) {
+				if (L_col_idx[q] == j) { Ljj = L_values[q]; break; }
+			}
+			if (std::fabs(Ljj) < 1e-30) Ljj = 1e-30;
+			L_values[p] = val / Ljj;
+		}
+
+		// diagonal
+		double diag = get_A(i, i);
+		for (int q = L_row_ptr[i]; q < L_row_ptr[i+1]; ++q) {
+			int k = L_col_idx[q];
+			if (k == i) continue;
+			diag -= L_values[q] * L_values[q];
+		}
+		if (!std::isfinite(diag) || diag <= 0.0) diag = 1e-30;
+		// set diagonal
+		for (int q = L_row_ptr[i]; q < L_row_ptr[i+1]; ++q) {
+			if (L_col_idx[q] == i) { L_values[q] = std::sqrt(diag); break; }
+		}
+	}
+
+	// build CSC for L (columns)
+	L_csc_col_ptr.assign(n + 1, 0);
+	for (size_t idx = 0; idx < L_col_idx.size(); ++idx) {
+		int col = L_col_idx[idx];
+		++L_csc_col_ptr[col + 1];
+	}
+	for (int i = 0; i < n; ++i) L_csc_col_ptr[i+1] += L_csc_col_ptr[i];
+	L_csc_row_idx.assign(L_col_idx.size(), 0);
+	L_csc_values.assign(L_values.size(), 0.0);
+	// fill
+	std::vector<int> fill_pos = L_csc_col_ptr;
+	for (int row = 0; row < n; ++row) {
+		for (int p = L_row_ptr[row]; p < L_row_ptr[row+1]; ++p) {
+			int col = L_col_idx[p];
+			int dst = fill_pos[col]++;
+			L_csc_row_idx[dst] = row;
+			L_csc_values[dst] = L_values[p];
+		}
+	}
+
+	ic_built = true;
+}
+
+void ElectrostaticAnalyzer::apply_ssor_preconditioner(const std::vector<double> &r, std::vector<double> &z) const
+{
+	const int n = (int)nodes.size();
+	z.assign(n, 0.0);
+	std::vector<double> diag_values(n, 1.0);
+	const double omega = 1.3;
+	const double scale = omega * (2.0 - omega);
+	if (preconditioner_diag.size() == (size_t)n) {
+		diag_values = preconditioner_diag;
+	} else {
+		for (int i = 0; i < n; ++i) {
+			double diag = 0.0;
+			for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
+				if (global_K_col_idx[p] == i) {
+					diag = global_K_values[p];
+					break;
+				}
+			}
+			if (!std::isfinite(diag) || std::fabs(diag) < 1e-30) diag = 1.0;
+			diag_values[i] = diag;
+		}
+	}
+
+	std::vector<double> y(n, 0.0);
+
+	// Forward sweep: (D + L) y = r
+	for (int i = 0; i < n; ++i) {
+		double diag = diag_values[i];
+		if (!std::isfinite(diag) || std::fabs(diag) < 1e-30) diag = 1.0;
+		double sum = r[i];
+		for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
+			int c = global_K_col_idx[p];
+			if (c < i) {
+				sum -= omega * global_K_values[p] * y[c];
+			}
+		}
+		y[i] = sum / diag;
+	}
+
+	// Middle scaling by D
+	for (int i = 0; i < n; ++i) {
+		y[i] *= diag_values[i];
+	}
+
+	// Backward sweep: (D + U) z = D y
+	for (int i = n - 1; i >= 0; --i) {
+		double diag = diag_values[i];
+		if (!std::isfinite(diag) || std::fabs(diag) < 1e-30) diag = 1.0;
+		double sum = y[i];
+		for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
+			int c = global_K_col_idx[p];
+			if (c > i) {
+				sum -= omega * global_K_values[p] * z[c];
+			}
+		}
+		z[i] = scale * (sum / diag);
+	}
+
+	for (int i = 0; i < n; ++i) {
+		if (fixed_node[i]) z[i] = 0.0;
+	}
+}
+
+void ElectrostaticAnalyzer::apply_preconditioner(const std::vector<double> &r, std::vector<double> &z) const
+{
+	const int n = (int)nodes.size();
+	z.assign(n, 0.0);
+	if (use_ssor_preconditioner) {
+		apply_ssor_preconditioner(r, z);
+		return;
+	}
+	if (!ic_built) {
+		// fallback: diagonal preconditioner
+		for (int i = 0; i < n; ++i) {
+			double Aii = 0.0;
+			for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i+1]; ++p) if (global_K_col_idx[p] == i) { Aii = global_K_values[p]; break; }
+			if (std::fabs(Aii) < 1e-30) z[i] = r[i]; else z[i] = r[i] / Aii;
+		}
+		return;
+	}
+
+	std::vector<double> scaled_r(n, 0.0);
+	for (int i = 0; i < n; ++i) {
+		scaled_r[i] = r[i] * ic_scale[i];
+	}
+
+	// forward solve L * y = r
+	std::vector<double> y(n, 0.0);
+	for (int i = 0; i < n; ++i) {
+		double s = scaled_r[i];
+		double Lii = 1.0;
+		for (int p = L_row_ptr[i]; p < L_row_ptr[i+1]; ++p) {
+			int c = L_col_idx[p];
+			if (c == i) { Lii = L_values[p]; break; }
+			s -= L_values[p] * y[c];
+		}
+		if (std::fabs(Lii) < 1e-30) Lii = 1e-30;
+		y[i] = s / Lii;
+	}
+
+	// backward solve L^T * z = y using CSC
+	for (int col = n - 1; col >= 0; --col) {
+		double s = y[col];
+		double Lii = 1.0;
+		// diagonal in CSC is somewhere in column col at row==col
+		for (int p = L_csc_col_ptr[col]; p < L_csc_col_ptr[col+1]; ++p) {
+			int row = L_csc_row_idx[p];
+			if (row == col) { Lii = L_csc_values[p]; break; }
+		}
+		for (int p = L_csc_col_ptr[col]; p < L_csc_col_ptr[col+1]; ++p) {
+			int row = L_csc_row_idx[p];
+			if (row == col) continue;
+			// L(row,col) contributes to equation for col: subtract L(row,col) * z[row]
+			s -= L_csc_values[p] * z[row];
+		}
+		if (std::fabs(Lii) < 1e-30) Lii = 1e-30;
+		z[col] = s / Lii;
+	}
+
+	for (int i = 0; i < n; ++i) {
+		z[i] *= ic_scale[i];
 	}
 }
 
@@ -183,6 +471,9 @@ void ElectrostaticAnalyzer::read_mesh(const char *filename)
 	}
 
 	fclose(fp);
+	// store counts for external getters
+	mesh_node_count = num_nodes;
+	mesh_element_count = num_elements;
 	printf("Read mesh: %d nodes, %d elements\n", num_nodes, num_elements);
 }
 
@@ -473,6 +764,7 @@ void ElectrostaticAnalyzer::apply_boundary_conditions()
 
 void ElectrostaticAnalyzer::assemble_global_matrix()
 {
+	auto t_start = std::chrono::high_resolution_clock::now();
 	const int n = (int)nodes.size();
 	global_K_rows.assign(n, {});
 	global_E_rows.assign(n, {});
@@ -556,14 +848,19 @@ void ElectrostaticAnalyzer::assemble_global_matrix()
 
 	build_sparse_matrix();
 
-	printf("Assembled sparse global matrix: %dx%d, nnz=%d\n", n, n, (int)global_K_values.size());
+	auto t_end = std::chrono::high_resolution_clock::now();
+	double elapsed = std::chrono::duration<double>(t_end - t_start).count();
+	printf("Assembled sparse global matrix: %dx%d, nnz=%d (%.6f s)\n", n, n, (int)global_K_values.size(), elapsed);
 }
 
 void ElectrostaticAnalyzer::solve_linear_system()
 {
+	auto t_start = std::chrono::high_resolution_clock::now();
 	const int n = (int)nodes.size();
-	const int max_iter = std::max(50, nstep);
-	const double tol = 1e-10;
+	const bool use_ssor = (n >= 50000);
+	const int max_iter = use_ssor ? std::max(200, nstep * 10) : std::max(50, nstep);
+	const double tol = use_ssor ? 1e-6 : 1e-10;
+	use_ssor_preconditioner = use_ssor;
 
 	std::vector<double> rhs = global_F;
 	apply_dirichlet_constraints(rhs);
@@ -573,35 +870,67 @@ void ElectrostaticAnalyzer::solve_linear_system()
 		if (fixed_node[i]) x[i] = fixed_value[i];
 	}
 
-	std::vector<double> r(n, 0.0), p(n, 0.0), Ap(n, 0.0);
+	if (use_ssor_preconditioner) {
+		preconditioner_diag.assign(n, 0.0);
+		for (int i = 0; i < n; ++i) {
+			double diag = 0.0;
+			for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
+				if (global_K_col_idx[p] == i) {
+					diag = global_K_values[p];
+					break;
+				}
+			}
+			if (!std::isfinite(diag) || std::fabs(diag) < 1e-30) diag = 1.0;
+			preconditioner_diag[i] = diag;
+		}
+		ic_built = false;
+		printf("Using SSOR preconditioner for n=%d\n", n);
+	} else {
+		// Build IC(0) preconditioner
+		build_incomplete_cholesky();
+		printf("Using IC(0) preconditioner for n=%d\n", n);
+	}
+
+	std::vector<double> r(n, 0.0), z(n, 0.0), p(n, 0.0), Ap(n, 0.0);
 	matvec(x, Ap);
 	for (int i = 0; i < n; ++i) {
 		r[i] = rhs[i] - Ap[i];
 		if (fixed_node[i]) r[i] = 0.0;
-		p[i] = r[i];
 	}
-
+	// apply preconditioner z = M^{-1} r
+	apply_preconditioner(r, z);
+	p = z;
 	auto dot = [](const std::vector<double> &a, const std::vector<double> &b) -> double {
 		double s = 0.0;
 		for (size_t i = 0; i < a.size(); ++i) s += a[i] * b[i];
 		return s;
 	};
 
-	double rsold = dot(r, r);
-	if (rsold < tol * tol) {
+	double rnorm0 = std::sqrt(dot(r, r));
+	if (rnorm0 < 1e-30) rnorm0 = 1e-30;
+
+	double rzold = dot(r, z);
+	if (std::sqrt(dot(r, r)) / rnorm0 < tol) {
 		potentials = x;
+		last_solver_iterations = 0;
+		last_solver_method = use_ssor_preconditioner ? "SSOR-CG" : "ICCG";
+		last_solver_time = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - t_start).count();
 		printf("Converged at iteration 0\n");
-		printf("Solved linear system with Conjugate Gradient\n");
+		printf("Solved linear system with %s\n", last_solver_method.c_str());
 		return;
 	}
 
 	int iter_done = 0;
+	int iter_count = 0;
 	for (int iter = 0; iter < max_iter; ++iter) {
+		double rnorm = std::sqrt(dot(r, r));
+		double rel_rnorm = rnorm / rnorm0;
+		printf("ICCG iteration %d: residual=%.3e rel=%.3e\n", iter + 1, rnorm, rel_rnorm);
 		matvec(p, Ap);
 		double denom = dot(p, Ap);
 		if (std::fabs(denom) < 1e-30) break;
 
-		double alpha = rsold / denom;
+		double alpha = rzold / denom;
 		for (int i = 0; i < n; ++i) {
 			x[i] += alpha * p[i];
 			r[i] -= alpha * Ap[i];
@@ -611,26 +940,34 @@ void ElectrostaticAnalyzer::solve_linear_system()
 			}
 		}
 
-		double rsnew = dot(r, r);
+		// check convergence
+		double rnorm2 = std::sqrt(dot(r, r));
 		iter_done = iter + 1;
-		if (std::sqrt(rsnew) < tol) {
+		if (rnorm2 / rnorm0 < tol) {
 			printf("Converged at iteration %d\n", iter_done);
+			iter_count = iter_done;
 			break;
 		}
 
-		double beta = rsnew / rsold;
-		for (int i = 0; i < n; ++i) {
-			p[i] = r[i] + beta * p[i];
-		}
-		rsold = rsnew;
+		apply_preconditioner(r, z);
+		double rznew = dot(r, z);
+		double beta = rznew / rzold;
+		for (int i = 0; i < n; ++i) p[i] = z[i] + beta * p[i];
+		rzold = rznew;
 	}
+	if (iter_count == 0) iter_count = iter_done;
 
 	potentials = x;
 	for (int i = 0; i < n; ++i) {
 		if (fixed_node[i]) potentials[i] = fixed_value[i];
 	}
 
-	printf("Solved linear system with Conjugate Gradient\n");
+	auto t_end = std::chrono::high_resolution_clock::now();
+	double elapsed = std::chrono::duration<double>(t_end - t_start).count();
+	last_solver_iterations = iter_count;
+	last_solver_time = elapsed;
+	last_solver_method = use_ssor_preconditioner ? "SSOR-CG" : "ICCG";
+	printf("Solved linear system with %s (%.6f s)\n", last_solver_method.c_str(), elapsed);
 }
 
 void ElectrostaticAnalyzer::solve()
@@ -664,8 +1001,151 @@ void ElectrostaticAnalyzer::solve()
 		}
 	}
 	assemble_global_matrix();
+	const int n = (int)nodes.size();
+	std::vector<int> perm(n, 0);
+	std::vector<int> inv_perm(n, 0);
+	if (n > 0) {
+		// Reverse Cuthill-McKee ordering on the assembled adjacency.
+		std::vector<int> degree(n, 0);
+		for (int i = 0; i < n; ++i) {
+			int deg = 0;
+			for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
+				if (global_K_col_idx[p] != i) ++deg;
+			}
+			degree[i] = deg;
+		}
+
+		std::vector<char> visited(n, 0);
+		std::vector<int> rcm_order;
+		rcm_order.reserve(n);
+		std::vector<int> frontier;
+		frontier.reserve(n);
+		std::vector<int> neighbors;
+		neighbors.reserve(64);
+
+		while ((int)rcm_order.size() < n) {
+			int start = -1;
+			int best_degree = 0;
+			for (int i = 0; i < n; ++i) {
+				if (visited[i]) continue;
+				if (start < 0 || degree[i] < best_degree) {
+					start = i;
+					best_degree = degree[i];
+				}
+			}
+			if (start < 0) break;
+
+			frontier.clear();
+			frontier.push_back(start);
+			visited[start] = 1;
+
+			for (size_t head = 0; head < frontier.size(); ++head) {
+				int node = frontier[head];
+				rcm_order.push_back(node);
+
+				neighbors.clear();
+				for (int p = global_K_row_ptr[node]; p < global_K_row_ptr[node + 1]; ++p) {
+					int nb = global_K_col_idx[p];
+					if (nb == node || visited[nb]) continue;
+					neighbors.push_back(nb);
+					visited[nb] = 1;
+				}
+				std::sort(neighbors.begin(), neighbors.end(), [&](int lhs, int rhs) {
+					if (degree[lhs] != degree[rhs]) return degree[lhs] < degree[rhs];
+					return lhs < rhs;
+				});
+				for (int nb : neighbors) {
+					frontier.push_back(nb);
+				}
+			}
+		}
+
+		std::reverse(rcm_order.begin(), rcm_order.end());
+		for (int i = 0; i < n; ++i) {
+			perm[i] = rcm_order[i];
+			inv_perm[perm[i]] = i;
+		}
+	}
+
+	auto permute_vector = [&](const std::vector<double> &src, std::vector<double> &dst) {
+		dst.assign(n, 0.0);
+		for (int i = 0; i < n; ++i) {
+			dst[i] = src[perm[i]];
+		}
+	};
+
+	auto permute_bool_vector = [&](const std::vector<bool> &src, std::vector<bool> &dst) {
+		dst.assign(n, false);
+		for (int i = 0; i < n; ++i) {
+			dst[i] = src[perm[i]];
+		}
+	};
+
+	auto permute_csr = [&](const std::vector<int> &src_row_ptr, const std::vector<int> &src_col_idx,
+		const std::vector<double> &src_values,
+		std::vector<int> &dst_row_ptr, std::vector<int> &dst_col_idx, std::vector<double> &dst_values) {
+		dst_row_ptr.assign(n + 1, 0);
+		dst_col_idx.clear();
+		dst_values.clear();
+		std::vector<std::pair<int, double>> row;
+		for (int new_row = 0; new_row < n; ++new_row) {
+			int old_row = perm[new_row];
+			row.clear();
+			for (int p = src_row_ptr[old_row]; p < src_row_ptr[old_row + 1]; ++p) {
+				int old_col = src_col_idx[p];
+				row.push_back(std::make_pair(inv_perm[old_col], src_values[p]));
+			}
+			std::sort(row.begin(), row.end(), [](const std::pair<int, double> &lhs, const std::pair<int, double> &rhs) {
+				return lhs.first < rhs.first;
+			});
+			for (size_t i = 0; i < row.size(); ) {
+				int col = row[i].first;
+				double sum = row[i].second;
+				size_t j = i + 1;
+				while (j < row.size() && row[j].first == col) {
+					sum += row[j].second;
+					++j;
+				}
+				if (std::fabs(sum) > 1e-30) {
+					dst_col_idx.push_back(col);
+					dst_values.push_back(sum);
+				}
+				i = j;
+			}
+			dst_row_ptr[new_row + 1] = (int)dst_col_idx.size();
+		}
+	};
+
+	const std::vector<int> original_K_row_ptr = global_K_row_ptr;
+	const std::vector<int> original_K_col_idx = global_K_col_idx;
+	const std::vector<double> original_K_values = global_K_values;
+	const std::vector<int> original_E_row_ptr = global_E_row_ptr;
+	const std::vector<int> original_E_col_idx = global_E_col_idx;
+	const std::vector<double> original_E_values = global_E_values;
+
+	permute_csr(original_K_row_ptr, original_K_col_idx, original_K_values, global_K_row_ptr, global_K_col_idx, global_K_values);
+	permute_csr(original_E_row_ptr, original_E_col_idx, original_E_values, global_E_row_ptr, global_E_col_idx, global_E_values);
+
+	std::vector<double> permuted_F;
+	permute_vector(global_F, permuted_F);
+	global_F.swap(permuted_F);
+
+	std::vector<double> permuted_potentials;
+	permute_vector(potentials, permuted_potentials);
+	potentials.swap(permuted_potentials);
+
+	std::vector<bool> permuted_fixed_node;
+	permute_bool_vector(fixed_node, permuted_fixed_node);
+	fixed_node.swap(permuted_fixed_node);
+
+	std::vector<double> permuted_fixed_value;
+	permute_vector(fixed_value, permuted_fixed_value);
+	fixed_value.swap(permuted_fixed_value);
+
 	std::vector<double> base_F = global_F;
 	printf("Transient solve: dt=%.3e, nstep=%d\n", dt, nstep);
+	step_solver_iterations.clear();
+	step_solver_times.clear();
 
 	std::vector<double> potentials_prev = potentials;
 	for (int step = 0; step < nstep; ++step) {
@@ -689,6 +1169,8 @@ void ElectrostaticAnalyzer::solve()
 		potentials = potentials_prev;
 		solve_linear_system();
 		potentials_prev = potentials;
+		step_solver_iterations.push_back(last_solver_iterations);
+		step_solver_times.push_back(last_solver_time);
 
 		double max_diff = 0.0;
 		for (size_t i = 0; i < potentials.size(); ++i) {
@@ -720,6 +1202,13 @@ void ElectrostaticAnalyzer::solve()
 		}
 	}
 
+	// Restore original node ordering for output/reporting.
+	std::vector<double> original_potentials(n, 0.0);
+	for (int i = 0; i < n; ++i) {
+		original_potentials[perm[i]] = potentials[i];
+	}
+	potentials.swap(original_potentials);
+
 	printf("Analysis completed.\n");
 	write_analysis_report(report_output_path.c_str());
 }
@@ -748,6 +1237,22 @@ void ElectrostaticAnalyzer::write_analysis_report(const char *filename) const
 	fprintf(fp, "final_time: %.6e\n", final_time);
 	fprintf(fp, "final_max_diff: %.6e\n", final_max_diff);
 	fprintf(fp, "converged_early: %s\n\n", converged_early ? "yes" : "no");
+	fprintf(fp, "solver_method: %s\n", last_solver_method.c_str());
+	fprintf(fp, "last_solver_iterations: %d\n", last_solver_iterations);
+	fprintf(fp, "last_solver_time_sec: %.6e\n\n", last_solver_time);
+
+	fprintf(fp, "Solver Iterations Per Step\n");
+	fprintf(fp, "-------------------------\n");
+	if (step_solver_iterations.empty()) {
+		fprintf(fp, "(no iteration history)\n\n");
+	} else {
+		fprintf(fp, "step,iterations,solve_time_sec\n");
+		for (size_t i = 0; i < step_solver_iterations.size(); ++i) {
+			double solve_time = (i < step_solver_times.size()) ? step_solver_times[i] : 0.0;
+			fprintf(fp, "%zu,%d,%.6e\n", i + 1, step_solver_iterations[i], solve_time);
+		}
+		fprintf(fp, "\n");
+	}
 
 	fprintf(fp, "Boundary Conditions\n");
 	fprintf(fp, "-------------------\n");
