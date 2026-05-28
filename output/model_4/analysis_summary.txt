@@ -13,8 +13,17 @@ nstep(max): 500
 convergence_tolerance: 1.000000e-08
 final_step: 1
 final_time: 1.500000e-20
-final_max_diff: 1.408988e-12
+final_max_diff: 1.409101e-12
 converged_early: yes
+
+solver_method: ICCG
+last_solver_iterations: 19
+last_solver_time_sec: 1.268930e-02
+
+Solver Iterations Per Step
+-------------------------
+step,iterations,solve_time_sec
+1,19,1.268930e-02
 
 Boundary Conditions
 -------------------
