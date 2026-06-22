@@ -16,14 +16,16 @@ final_time: 0.000000e+00
 final_max_diff: 0.000000e+00
 converged_early: no
 
-solver_method: ICCG
-last_solver_iterations: 20
-last_solver_time_sec: 1.949460e-02
+solver_method: ICCG (scaled)
+last_solver_converged: yes
+last_solver_relative_residual: 3.777285e-09
+last_solver_iterations: 18
+last_solver_time_sec: 2.837000e-04
 
 Solver Iterations Per Step
 -------------------------
 step,iterations,solve_time_sec
-1,20,1.949460e-02
+1,18,2.837000e-04
 
 Boundary Conditions
 -------------------

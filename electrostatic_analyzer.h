@@ -88,6 +88,8 @@ private:
 	bool converged_early;
 	int last_solver_iterations;
 	double last_solver_time;
+	double last_solver_relative_residual;
+	bool last_solver_converged;
 	std::string last_solver_method;
 	std::vector<int> step_solver_iterations;
 	std::vector<double> step_solver_times;
