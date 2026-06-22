@@ -857,8 +857,8 @@ void ElectrostaticAnalyzer::solve_linear_system()
 {
 	auto t_start = std::chrono::high_resolution_clock::now();
 	const int n = (int)nodes.size();
-	const bool use_ssor = (n >= 50000);
-	const int max_iter = use_ssor ? std::max(200, nstep * 10) : std::max(50, nstep);
+	const bool use_ssor = (n >= 50000);//falseにすれば常にICCG、trueにすれば大規模問題でSSOR-CGを使用する
+	const int max_iter = use_ssor ? std::max(1000, nstep * 10) : std::max(50, nstep);
 	const double tol = use_ssor ? 1e-6 : 1e-10;
 	use_ssor_preconditioner = use_ssor;
 
@@ -986,7 +986,29 @@ void ElectrostaticAnalyzer::solve()
 	}
 
 	if (dt <= 0.0) {
-		printf("Invalid time step: dt must be positive for transient analysis.\n");
+		printf("Steady-state solve: dt=%.3e (time term disabled)\n", dt);
+		apply_boundary_conditions();
+		if (std::none_of(fixed_node.begin(), fixed_node.end(), [](bool v) { return v; })) {
+			// 境界固定が無い場合は基準点を1つだけ 0V に固定して特異性を避ける
+			if (!fixed_node.empty()) {
+				fixed_node[0] = true;
+				fixed_value[0] = 0.0;
+				potentials[0] = 0.0;
+				printf("No fixed nodes found; node 1 is used as a reference potential (0.0V)\n");
+			}
+		}
+		assemble_global_matrix();
+		solve_linear_system();
+		final_step = 1;
+		final_time = 0.0;
+		final_max_diff = 0.0;
+		step_solver_iterations.clear();
+		step_solver_times.clear();
+		step_solver_iterations.push_back(last_solver_iterations);
+		step_solver_times.push_back(last_solver_time);
+		write_potential_distribution((step_output_prefix + "001").c_str());
+		printf("Analysis completed.\n");
+		write_analysis_report(report_output_path.c_str());
 		return;
 	}
 
