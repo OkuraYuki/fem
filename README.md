@@ -9,19 +9,34 @@
 ## クイックスタート
 
 ### ビルド
+
+**Linux / macOS:**
 ```bash
-g++ -std=c++11 main.cpp electrostatic_analyzer.cpp -o fem.exe
+g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem
+```
+
+**Windows (PowerShell / cmd):**
+```powershell
+g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem.exe
 ```
 
 ### 実行
 
-**すべてのモデルを実行**
-```powershell
-.\fem.exe models.dat
+**Linux / macOS:**
+```bash
+# すべてのモデルを実行
+./fem models.dat
+
+# model_1 のみ実行
+./fem models.dat model_1
 ```
 
-**特定のモデルのみ実行**
+**Windows (PowerShell):**
 ```powershell
+# すべてのモデルを実行
+.\fem.exe models.dat
+
+# model_1 のみ実行
 .\fem.exe models.dat model_1
 ```
 
@@ -145,13 +160,41 @@ model_3
 ### `output/<model_name>/analysis_summary.txt` — 解析レポート
 
 ```
-=== Analysis Report ===
-Mesh:           216 nodes, 750 elements
-Boundary Conditions: 0
-Materials:      2
-[...]
-Convergence:    Step 10, t=0.01 s, max_diff=9.91e-04, converged_early=no
+Electrostatic FEM Analysis Summary
+Mesh
+  Nodes / Elements
+Analysis Conditions
+  dt, nstep(max), convergence_tolerance
+  final_step, final_time, final_max_diff, converged_early
+  solver_method, last_solver_iterations, last_solver_time_sec
+Solver Iterations Per Step
+  step, iterations, solve_time_sec
+Boundary Conditions
+  count と各条件の内容
+Fixed Materials (tmate.dat)
+  count と材料番号ごとの固定電位値
+Material Properties
+  各材料の sigma=(σx, σy, σz), epsilon=(εx, εy, εz)
+Material Block Ranges
+  start, end, material_id
 ```
+
+- `Nodes` / `Elements`: メッシュの節点数と要素数
+- `dt`: 時間刻み
+- `nstep(max)`: 最大ステップ数
+- `convergence_tolerance`: 外側の早期収束判定に使うしきい値
+- `final_step`: 実際に最後まで進んだステップ番号
+- `final_time`: 最終ステップまで進めた時刻
+- `final_max_diff`: 最終ステップでの最大電位差
+- `converged_early`: `final_max_diff < convergence_tolerance` で途中終了したかどうか
+- `solver_method`: 内側の線形ソルバ方式（ICCG / SSOR-CG）
+- `last_solver_iterations`: 最後のステップでの反復回数
+- `last_solver_time_sec`: 最後のステップの線形ソルバ時間
+- `Solver Iterations Per Step`: 各時間ステップごとの反復回数と計算時間
+- `Boundary Conditions`: `sin.dat` に入っている境界条件の件数と内容
+- `Fixed Materials (tmate.dat)`: 材料番号ごとの固定電位条件
+- `Material Properties`: 材料ごとの導電率と誘電率
+- `Material Block Ranges`: どの要素範囲にどの材料を割り当てたか
 
 ### `batch_summary.csv` — バッチ実行結果集約（複数モデル実行時）
 
@@ -161,7 +204,13 @@ model_1,models/model_1/in.dat,...,output/model_1,...,10,0.01,0.000990879,no
 model_2,models/model_2/in.dat,...,output/model_2,...,10,0.01,0.000990879,no
 ```
 
-すべてのモデル実行結果を1行ずつ記録。解析後の比較・検証に使用。
+- `model_name`: モデル名
+- `mesh_file` / `material_file` / `initial_file` / `config_file`: 各入力ファイルのパス
+- `output_dir`: そのモデルの出力先ディレクトリ
+- `nodes` / `elements`: メッシュ規模
+- `boundaries` / `fixed_materials` / `materials`: 入力条件の件数
+- `final_step` / `final_time` / `final_max_diff` / `converged_early`: 解析結果の要約
+- すべてのモデル実行結果を1行ずつ記録。解析後の比較・検証に使用。
 
 ---
 
@@ -231,25 +280,14 @@ main()
 
 ---
 
-## ビルド・実行
+## ビルド・実行（詳細）
 
-### ビルド
-```bash
-g++ -std=c++11 main.cpp electrostatic_analyzer.cpp -o fem.exe
-```
+クイックスタートを参照してください。コンパイラは g++ の他に clang++ も使用可能です。
 
-### 実行例
-
-```bash
-# すべてのモデル実行
-./fem.exe models.dat
-
-# model_1 のみ実行
-./fem.exe models.dat model_1
-
-# model_2 のみ実行
-./fem.exe models.dat model_2
-```
+**オプション:**
+- `-O2`: 最適化レベル 2（デフォルト推奨）
+- `-O3`: さらに高い最適化（大規模問題用）
+- `-g`: デバッグシンボル付きビルド
 
 ---
 

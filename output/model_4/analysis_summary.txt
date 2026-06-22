@@ -8,22 +8,22 @@ Elements: 750
 
 Analysis Conditions
 -------------------
-dt: 1.500000e-20
+dt: 0.000000e+00
 nstep(max): 500
 convergence_tolerance: 1.000000e-08
 final_step: 1
-final_time: 1.500000e-20
-final_max_diff: 1.409101e-12
-converged_early: yes
+final_time: 0.000000e+00
+final_max_diff: 0.000000e+00
+converged_early: no
 
 solver_method: ICCG
-last_solver_iterations: 19
-last_solver_time_sec: 1.268930e-02
+last_solver_iterations: 20
+last_solver_time_sec: 1.949460e-02
 
 Solver Iterations Per Step
 -------------------------
 step,iterations,solve_time_sec
-1,19,1.268930e-02
+1,20,1.949460e-02
 
 Boundary Conditions
 -------------------

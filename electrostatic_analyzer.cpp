@@ -19,6 +19,8 @@ ElectrostaticAnalyzer::ElectrostaticAnalyzer()
 	converged_early = false;
 	last_solver_iterations = 0;
 	last_solver_time = 0.0;
+	last_solver_relative_residual = 0.0;
+	last_solver_converged = false;
 	last_solver_method = "ICCG";
 	step_output_prefix = "tempa.dat";
 	report_output_path = "analysis_summary.txt";
@@ -857,18 +859,51 @@ void ElectrostaticAnalyzer::solve_linear_system()
 {
 	auto t_start = std::chrono::high_resolution_clock::now();
 	const int n = (int)nodes.size();
-	const bool use_ssor = (n >= 50000);
-	const int max_iter = use_ssor ? std::max(200, nstep * 10) : std::max(50, nstep);
-	const double tol = use_ssor ? 1e-6 : 1e-10;
+	const bool steady_state = (dt <= 0.0);
+	// IC(0) is more expensive to build than SSOR, but is substantially more robust
+	// for the high conductivity contrast encountered by the steady-state models.
+	const bool use_ssor = (n >= 50000 && !steady_state);
+	const int max_iter = steady_state ? 2000
+		: (use_ssor ? std::max(1000, nstep * 10) : std::max(50, nstep));
+	const double tol = steady_state ? 1e-8 : (use_ssor ? 1e-6 : 1e-10);
 	use_ssor_preconditioner = use_ssor;
+	last_solver_converged = false;
+	last_solver_relative_residual = 1.0;
 
 	std::vector<double> rhs = global_F;
 	apply_dirichlet_constraints(rhs);
 
-	std::vector<double> x = potentials;
-	for (int i = 0; i < n; ++i) {
-		if (fixed_node[i]) x[i] = fixed_value[i];
+	// Symmetric diagonal equilibration for the steady-state system:
+	//   A_s = S A S, b_s = S b, x = S y, S_ii = 1/sqrt(A_ii).
+	// This preserves symmetry and positive definiteness required by CG while
+	// reducing coefficient scale differences before constructing the preconditioner.
+	std::vector<double> scale(n, 1.0);
+	if (steady_state) {
+		for (int i = 0; i < n; ++i) {
+			double diag = 0.0;
+			for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
+				if (global_K_col_idx[p] == i) {
+					diag = global_K_values[p];
+					break;
+				}
+			}
+			if (std::isfinite(diag) && diag > 1e-30) scale[i] = 1.0 / std::sqrt(diag);
+		}
+		for (int i = 0; i < n; ++i) {
+			for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
+				global_K_values[p] *= scale[i] * scale[global_K_col_idx[p]];
+			}
+			rhs[i] *= scale[i];
+		}
+		printf("Applied symmetric diagonal scaling; max_iter=%d tol=%.1e\n", max_iter, tol);
 	}
+
+	std::vector<double> x(n, 0.0);
+	for (int i = 0; i < n; ++i) x[i] = potentials[i] / scale[i];
+	for (int i = 0; i < n; ++i) {
+		if (fixed_node[i]) x[i] = fixed_value[i] / scale[i];
+	}
+	if (!steady_state) printf("Linear solver limits: max_iter=%d tol=%.1e\n", max_iter, tol);
 
 	if (use_ssor_preconditioner) {
 		preconditioner_diag.assign(n, 0.0);
@@ -907,28 +942,33 @@ void ElectrostaticAnalyzer::solve_linear_system()
 	};
 
 	double rnorm0 = std::sqrt(dot(r, r));
-	if (rnorm0 < 1e-30) rnorm0 = 1e-30;
-
-	double rzold = dot(r, z);
-	if (std::sqrt(dot(r, r)) / rnorm0 < tol) {
-		potentials = x;
+	if (rnorm0 < 1e-30) {
+		potentials.resize(n);
+		for (int i = 0; i < n; ++i) potentials[i] = scale[i] * x[i];
 		last_solver_iterations = 0;
-		last_solver_method = use_ssor_preconditioner ? "SSOR-CG" : "ICCG";
+		last_solver_relative_residual = 0.0;
+		last_solver_converged = true;
+		last_solver_method = use_ssor_preconditioner ? "SSOR-CG" : (steady_state ? "ICCG (scaled)" : "ICCG");
 		last_solver_time = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - t_start).count();
 		printf("Converged at iteration 0\n");
-		printf("Solved linear system with %s\n", last_solver_method.c_str());
 		return;
 	}
 
+	double rzold = dot(r, z);
+
 	int iter_done = 0;
-	int iter_count = 0;
 	for (int iter = 0; iter < max_iter; ++iter) {
 		double rnorm = std::sqrt(dot(r, r));
 		double rel_rnorm = rnorm / rnorm0;
-		printf("ICCG iteration %d: residual=%.3e rel=%.3e\n", iter + 1, rnorm, rel_rnorm);
+		if (iter < 10 || (iter + 1) % 100 == 0) {
+			printf("CG iteration %d: residual=%.3e rel=%.3e\n", iter + 1, rnorm, rel_rnorm);
+		}
 		matvec(p, Ap);
 		double denom = dot(p, Ap);
-		if (std::fabs(denom) < 1e-30) break;
+		if (!std::isfinite(denom) || denom <= 1e-30 || !std::isfinite(rzold)) {
+			printf("WARNING: CG breakdown at iteration %d\n", iter + 1);
+			break;
+		}
 
 		double alpha = rzold / denom;
 		for (int i = 0; i < n; ++i) {
@@ -943,31 +983,42 @@ void ElectrostaticAnalyzer::solve_linear_system()
 		// check convergence
 		double rnorm2 = std::sqrt(dot(r, r));
 		iter_done = iter + 1;
-		if (rnorm2 / rnorm0 < tol) {
+		last_solver_relative_residual = rnorm2 / rnorm0;
+		if (last_solver_relative_residual < tol) {
 			printf("Converged at iteration %d\n", iter_done);
-			iter_count = iter_done;
+			last_solver_converged = true;
 			break;
 		}
 
 		apply_preconditioner(r, z);
 		double rznew = dot(r, z);
+		if (!std::isfinite(rznew) || std::fabs(rzold) < 1e-300) {
+			printf("WARNING: CG preconditioner breakdown at iteration %d\n", iter + 1);
+			break;
+		}
 		double beta = rznew / rzold;
 		for (int i = 0; i < n; ++i) p[i] = z[i] + beta * p[i];
 		rzold = rznew;
 	}
-	if (iter_count == 0) iter_count = iter_done;
 
-	potentials = x;
+	potentials.resize(n);
+	for (int i = 0; i < n; ++i) potentials[i] = scale[i] * x[i];
 	for (int i = 0; i < n; ++i) {
 		if (fixed_node[i]) potentials[i] = fixed_value[i];
 	}
 
 	auto t_end = std::chrono::high_resolution_clock::now();
 	double elapsed = std::chrono::duration<double>(t_end - t_start).count();
-	last_solver_iterations = iter_count;
+	last_solver_iterations = iter_done;
 	last_solver_time = elapsed;
-	last_solver_method = use_ssor_preconditioner ? "SSOR-CG" : "ICCG";
-	printf("Solved linear system with %s (%.6f s)\n", last_solver_method.c_str(), elapsed);
+	last_solver_method = use_ssor_preconditioner ? "SSOR-CG" : (steady_state ? "ICCG (scaled)" : "ICCG");
+	if (last_solver_converged) {
+		printf("Solved linear system with %s: rel_residual=%.3e (%.6f s)\n",
+			last_solver_method.c_str(), last_solver_relative_residual, elapsed);
+	} else {
+		printf("WARNING: linear solver did not converge with %s: iterations=%d rel_residual=%.3e (%.6f s)\n",
+			last_solver_method.c_str(), last_solver_iterations, last_solver_relative_residual, elapsed);
+	}
 }
 
 void ElectrostaticAnalyzer::solve()
@@ -986,7 +1037,29 @@ void ElectrostaticAnalyzer::solve()
 	}
 
 	if (dt <= 0.0) {
-		printf("Invalid time step: dt must be positive for transient analysis.\n");
+		printf("Steady-state solve: dt=%.3e (time term disabled)\n", dt);
+		apply_boundary_conditions();
+		if (std::none_of(fixed_node.begin(), fixed_node.end(), [](bool v) { return v; })) {
+			// 境界固定が無い場合は基準点を1つだけ 0V に固定して特異性を避ける
+			if (!fixed_node.empty()) {
+				fixed_node[0] = true;
+				fixed_value[0] = 0.0;
+				potentials[0] = 0.0;
+				printf("No fixed nodes found; node 1 is used as a reference potential (0.0V)\n");
+			}
+		}
+		assemble_global_matrix();
+		solve_linear_system();
+		final_step = 1;
+		final_time = 0.0;
+		final_max_diff = 0.0;
+		step_solver_iterations.clear();
+		step_solver_times.clear();
+		step_solver_iterations.push_back(last_solver_iterations);
+		step_solver_times.push_back(last_solver_time);
+		write_potential_distribution((step_output_prefix + "001").c_str());
+		printf("Analysis completed.\n");
+		write_analysis_report(report_output_path.c_str());
 		return;
 	}
 
@@ -1238,6 +1311,8 @@ void ElectrostaticAnalyzer::write_analysis_report(const char *filename) const
 	fprintf(fp, "final_max_diff: %.6e\n", final_max_diff);
 	fprintf(fp, "converged_early: %s\n\n", converged_early ? "yes" : "no");
 	fprintf(fp, "solver_method: %s\n", last_solver_method.c_str());
+	fprintf(fp, "last_solver_converged: %s\n", last_solver_converged ? "yes" : "no");
+	fprintf(fp, "last_solver_relative_residual: %.6e\n", last_solver_relative_residual);
 	fprintf(fp, "last_solver_iterations: %d\n", last_solver_iterations);
 	fprintf(fp, "last_solver_time_sec: %.6e\n\n", last_solver_time);
 
