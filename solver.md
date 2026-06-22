@@ -184,3 +184,74 @@
 所見:
 - RCM は壊れていないが、ICCG の収束性を劇的に改善するほどではない。
 - 次の候補は SSOR / symmetric Gauss-Seidel、あるいはより強い前処理の導入。
+
+## 定常解析ソルバの改善（model_10）
+実装・検証日: 2026-06-22
+
+### 背景
+
+- `model_10` は `model_7` と同じメッシュ・材料条件を使い、`dt=0` とした定常解析モデル。
+- Mesh: 109500 nodes, 616464 elements
+- 導電率は、金属部の `5.8e7` に対して低導電率部が `8.0e-3 〜 1.0e-2` で、最大約 72.5 億倍の差がある。
+- 従来の大規模用 SSOR-CG では、相対残差が約 `1.32e-1` で停滞し、5000 反復後も収束しなかった。
+- 定常解析において `nstep=500` が線形ソルバの上限 `nstep * 10 = 5000` に流用されていた。
+
+### 変更内容
+
+1. **定常解析のソルバ切り替え**
+   - `dt <= 0` の場合は、節点数が 50000 以上でも SSOR-CG ではなく IC(0) 前処理付き CG（ICCG）を使用する。
+   - 時間依存解析の大規模モデルは、従来どおり SSOR-CG を使用する。
+
+2. **対称対角スケーリング**
+   - 定常線形システムに対し、以下の変数変換を適用する。
+
+     ```text
+     S_ii = 1 / sqrt(A_ii)
+     A_scaled = S A S
+     b_scaled = S b
+     x = S y
+     ```
+
+   - 変換後の `A_scaled y = b_scaled` を ICCG で解き、解析後に `x = S y` で元の電位へ戻す。
+   - 対称性と正定値性を保つ変換のため、CG の適用条件を維持できる。
+   - 対称対角スケーリング後の行列に対して IC(0) 前処理を構築する。ソルバ表示は `ICCG (scaled)` とする。
+
+3. **定常解析の反復条件を分離**
+   - 反復上限: 2000
+   - 相対残差許容値: `1.0e-8`
+   - 定常解析では `sina.dat.t` の `nstep` を線形ソルバの反復上限に使用しない。
+
+4. **収束判定とログの明確化**
+   - 収束時はソルバ名、最終相対残差、解法時間を表示する。
+   - 未収束時は `WARNING: linear solver did not converge` を表示する。
+   - ターミナルの反復ログは 1〜10 反復を毎回、以降を 100 反復ごとに表示する。表示を省略した反復も計算自体は実行される。
+   - `analysis_summary.txt` に以下を追加する。
+     - `last_solver_converged`
+     - `last_solver_relative_residual`
+
+### model_10 検証結果
+
+| 項目 | 変更前 | 変更後 |
+|---|---:|---:|
+| ソルバ | SSOR-CG | ICCG (scaled) |
+| 反復数 | 5000 | 318 |
+| 最終相対残差 | 約 `1.32e-1` | `9.919235e-9` |
+| 解法時間 | 約 28.8〜39.6 s | `1.551057 s` |
+| 収束 | no | yes |
+
+最新の `output/model_10/analysis_summary.txt` で、以下を確認した。
+
+```text
+solver_method: ICCG (scaled)
+last_solver_converged: yes
+last_solver_relative_residual: 9.919235e-09
+last_solver_iterations: 318
+last_solver_time_sec: 1.551057e+00
+```
+
+### 注意点
+
+- `final_max_diff` は時間ステップ間の電位差であり、1 回だけ解く定常解析の線形ソルバ精度を示す値ではない。
+- 定常解析の精度確認には `last_solver_converged` と `last_solver_relative_residual` を使用する。
+- 対角スケーリングは導電率差そのものを物理的に変更する処理ではない。線形方程式を数値的に解きやすい同値な形へ変換している。
+- 変更は `experiment/steady-solver-scaling` ブランチで切り分け、実装前の基準状態をコミット `c6f1d20` に保存した。
