@@ -16,16 +16,14 @@ final_time: 0.000000e+00
 final_max_diff: 0.000000e+00
 converged_early: no
 
-solver_method: ICCG (scaled)
-last_solver_converged: yes
-last_solver_relative_residual: 9.919235e-09
-last_solver_iterations: 318
-last_solver_time_sec: 1.514315e+00
+solver_method: SSOR-CG
+last_solver_iterations: 5000
+last_solver_time_sec: 2.876738e+01
 
 Solver Iterations Per Step
 -------------------------
 step,iterations,solve_time_sec
-1,318,1.514315e+00
+1,5000,2.876738e+01
 
 Boundary Conditions
 -------------------
@@ -44,8 +42,8 @@ count: 6
 2: sigma=(5.800000e+07, 5.800000e+07, 5.800000e+07) epsilon=(8.900000e-12, 8.900000e-12, 8.900000e-12)
 3: sigma=(5.800000e+07, 5.800000e+07, 5.800000e+07) epsilon=(8.900000e-12, 8.900000e-12, 8.900000e-12)
 4: sigma=(5.800000e+07, 5.800000e+07, 5.800000e+07) epsilon=(8.900000e-12, 8.900000e-12, 8.900000e-12)
-5: sigma=(1.000000e-02, 1.000000e-02, 1.000000e-02) epsilon=(1.000000e-10, 1.000000e-10, 1.000000e-10)
-6: sigma=(1.000000e-02, 1.000000e-02, 1.000000e-02) epsilon=(1.000000e-10, 1.000000e-10, 1.000000e-10)
+5: sigma=(1.000000e-02, 1.000000e-02, 8.000000e-03) epsilon=(1.000000e-10, 1.000000e-10, 1.000000e-10)
+6: sigma=(1.000000e-02, 1.000000e-02, 8.000000e-03) epsilon=(1.000000e-10, 1.000000e-10, 1.000000e-10)
 
 Material Block Ranges
 ---------------------
