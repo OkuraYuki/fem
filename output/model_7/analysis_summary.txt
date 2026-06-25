@@ -1,46 +1,64 @@
-Electrostatic FEM Analysis Summary
-=================================
+Electrostatic FEM Analysis Summary / 静電場FEM解析結果
+=====================================================
+
+このファイルの見方
+------------------
+- dt <= 0 は定常解析、dt > 0 はBackward Euler法による過渡解析です。
+- last_solver_converged=yes は、線形ソルバーの相対残差が許容値未満になったことを表します。
+- converged_early=yes は、時間ステップ間の最大電位差が収束許容値未満になったことを表します。
+- 電位の単位はV、時間の単位はs、solve_timeの単位はsです。
 
 Mesh
 ----
+解析に使用した四面体メッシュの規模です。
 Nodes: 109500
 Elements: 616464
 
 Analysis Conditions
 -------------------
+時間積分条件と解析全体の終了状態です。
+analysis_type: transient（過渡解析）
 dt: 1.000000e-06
 nstep(max): 5
 convergence_tolerance: 1.000000e-08
 final_step: 5
 final_time: 5.000000e-06
-final_max_diff: 2.147584e-05
+final_max_diff: 1.156768e-07
 converged_early: no
 
-solver_method: SSOR-CG
-last_solver_iterations: 200
-last_solver_time_sec: 1.770846e+00
+solver_method: ICCG (scaled)
+  ICCG: 不完全コレスキー前処理付き共役勾配法
+  scaled: 行列係数の桁差を抑える対称対角スケーリングを適用
+last_solver_converged: no
+last_solver_relative_residual: 1.006327e-08
+last_solver_iterations: 301
+last_solver_time_sec: 2.099773e+00
 
 Solver Iterations Per Step
 -------------------------
+各時間ステップにおける線形ソルバーの反復回数と求解時間です。
 step,iterations,solve_time_sec
-1,200,1.779851e+00
-2,200,1.690273e+00
-3,200,1.753647e+00
-4,200,1.754522e+00
-5,200,1.770846e+00
+1,314,1.576248e+00
+2,309,2.197112e+00
+3,315,2.479664e+00
+4,314,2.394642e+00
+5,301,2.099773e+00
 
 Boundary Conditions
 -------------------
+sin.datで節点番号を指定した境界条件です。type 1/4はnode1とnode2を固定し、その他は現在の実装ではnode1を固定します。
 count: 0
 
 Fixed Materials (tmate.dat)
 ---------------------------
+指定材料に属する節点へ適用した固定電位です。valueの単位はVです。
 count: 2
 1: material_id=1 value=-1.000000e+00
 2: material_id=2 value=1.000000e+00
 
 Material Properties
 -------------------
+材料ごとの異方性物性です。sigma=(x,y,z)は導電率、epsilon=(x,y,z)は誘電率です。
 count: 6
 1: sigma=(5.800000e+07, 5.800000e+07, 5.800000e+07) epsilon=(8.900000e-12, 8.900000e-12, 8.900000e-12)
 2: sigma=(5.800000e+07, 5.800000e+07, 5.800000e+07) epsilon=(8.900000e-12, 8.900000e-12, 8.900000e-12)
@@ -51,6 +69,7 @@ count: 6
 
 Material Block Ranges
 ---------------------
+要素番号startからendまでに割り当てられた材料IDです（番号は1始まり、両端を含む）。
 count: 360
 1: start=1 end=24 material_id=6
 2: start=8563 end=8586 material_id=6

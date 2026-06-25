@@ -11,7 +11,7 @@ struct Node {
 
 struct Element {
 	int nodes[4];      // 4節点四面体
-	int material;      // 0-based material id
+	int material;      // 0始まりの材料ID
 };
 
 struct Material {
@@ -21,7 +21,7 @@ struct Material {
 };
 
 struct BoundaryCondition {
-	int node1, node2;  // 0-based node id
+	int node1, node2;  // 0始まりの節点ID
 	int type;          // 1/4: Dirichlet, 5: Neumann(自然境界)
 	double value;
 };
@@ -63,7 +63,8 @@ private:
 	std::vector<int> global_E_col_idx;
 	std::vector<double> global_E_values;
 
-	// IC(0) preconditioner (lower triangular L in CSR and CSC for transpose)
+	// IC(0)前処理で使用する下三角行列L。
+	// 前進代入用のCSR形式と、転置行列による後退代入用のCSC形式を保持する。
 	std::vector<int> L_row_ptr;
 	std::vector<int> L_col_idx;
 	std::vector<double> L_values;
@@ -108,7 +109,7 @@ private:
 	void matvec_csr(const std::vector<int> &row_ptr, const std::vector<int> &col_idx,
 		const std::vector<double> &values, const std::vector<double> &x, std::vector<double> &y) const;
 	void write_analysis_report(const char *filename) const;
-	// Incomplete Cholesky (IC(0)) preconditioner
+	// 不完全コレスキー分解IC(0)による前処理
 	void build_incomplete_cholesky();
 	void apply_ssor_preconditioner(const std::vector<double> &r, std::vector<double> &z) const;
 	void apply_preconditioner(const std::vector<double> &r, std::vector<double> &z) const;
