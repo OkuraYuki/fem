@@ -10,6 +10,10 @@
 #include <chrono>
 #include <vector>
 
+// ============================================================================
+// 初期化・共通設定
+// ============================================================================
+
 ElectrostaticAnalyzer::ElectrostaticAnalyzer()
 	: mesh_node_count(0), mesh_element_count(0), dt(0.0), nstep(200), unit(1.0)
 {
@@ -85,8 +89,9 @@ void ElectrostaticAnalyzer::build_time_step_matrix(double scale_eps,
 		return;
 	}
 
-	// global_K/global_E are already sorted and aggregated by column per row.
-	// Merge them directly to avoid per-step row copies and sorting.
+	// global_Kとglobal_Eは、各行の列番号順に整列・集約済みである。
+	// 行コピーと再ソートを避けるため、2つのCSR行列を直接マージする。
+	// scale_eps=1/dtの場合、A = K_sigma + K_epsilon/dt を作る。
 	for (int r = 0; r < n; ++r) {
 		int pK = global_K_row_ptr[r];
 		int pKEnd = global_K_row_ptr[r + 1];
@@ -138,8 +143,9 @@ void ElectrostaticAnalyzer::build_sparse_matrix()
 void ElectrostaticAnalyzer::apply_dirichlet_constraints(std::vector<double> &rhs)
 {
 	const int n = (int)nodes.size();
-	// Single pass over CSR matrix: adjust rhs for fixed columns and zero non-diagonal
-	// entries that reference fixed nodes. This is O(nnz).
+	// 固定節点jの既知電位を、未知節点iの右辺へ移す：
+	//   rhs[i] <- rhs[i] - A[i,j] * fixed_value[j]
+	// 同時に固定節点列の非対角成分を0にする。計算量はO(nnz)。
 	for (int r = 0; r < n; ++r) {
 		for (int p = global_K_row_ptr[r]; p < global_K_row_ptr[r + 1]; ++p) {
 			int c = global_K_col_idx[p];
@@ -152,7 +158,9 @@ void ElectrostaticAnalyzer::apply_dirichlet_constraints(std::vector<double> &rhs
 		}
 	}
 
-	// Ensure diagonal entries for fixed nodes are 1.0 and other row entries are zero
+	// 固定節点の式を phi[j] = fixed_value[j] に置き換える。
+	// そのため固定節点行は、対角成分を1、その他を0とする。
+	// 行と列の両方を処理することで、CG法に必要な行列の対称性を保つ。
 	for (int i = 0; i < n; ++i) {
 		if (!fixed_node[i]) continue;
 		bool has_diag = false;
@@ -202,7 +210,7 @@ void ElectrostaticAnalyzer::build_incomplete_cholesky()
 	L_col_idx.clear();
 	L_values.clear();
 
-	// Symmetric diagonal scaling to reduce coefficient spread before IC(0).
+	// IC(0)分解前に対称対角スケーリングを行い、係数の桁差を小さくする。
 	const double shift = 1e-30;
 	for (int i = 0; i < n; ++i) {
 		double diag = 0.0;
@@ -217,20 +225,20 @@ void ElectrostaticAnalyzer::build_incomplete_cholesky()
 		ic_scale[i] = 1.0 / std::sqrt(diag);
 	}
 
-	// build pattern: keep columns <= row (lower triangle including diag)
+	// 下三角部分（対角を含む、列番号<=行番号）の非ゼロパターンを作る。
 	for (int i = 0; i < n; ++i) {
 		for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
 			int c = global_K_col_idx[p];
 			if (c <= i) {
 				L_col_idx.push_back(c);
-				// placeholder for value
+				// 数値は後のIC(0)計算で設定するため、ここでは仮に0を入れる。
 				L_values.push_back(0.0);
 			}
 		}
 		L_row_ptr[i + 1] = (int)L_col_idx.size();
 	}
 
-	// helper to get A(i,j)
+	// スケーリング後の行列成分A(i,j)を取得する補助処理。
 	auto get_A = [&](int row, int col)->double{
 		for (int p = global_K_row_ptr[row]; p < global_K_row_ptr[row+1]; ++p) {
 			if (global_K_col_idx[p] == col) return ic_scale[row] * global_K_values[p] * ic_scale[col];
@@ -238,15 +246,15 @@ void ElectrostaticAnalyzer::build_incomplete_cholesky()
 		return 0.0;
 	};
 
-	// numeric IC(0)
+	// A ≒ L L^T となるLを、元行列と同じ非ゼロパターンの範囲で計算する。
 	for (int i = 0; i < n; ++i) {
-		// process off-diagonals j < i
+		// 非対角成分L(i,j)、j<iを計算する。
 		for (int p = L_row_ptr[i]; p < L_row_ptr[i+1]; ++p) {
 			int j = L_col_idx[p];
 			if (j == i) continue;
 			double val = get_A(i, j);
 
-			// compute sum_k L(i,k)*L(j,k) for k < j
+			// jより前にある共通の非ゼロ列について、L(i,k)L(j,k)を差し引く。
 			int pi = L_row_ptr[i];
 			int pj = L_row_ptr[j];
 			while (pi < L_row_ptr[i+1] && pj < L_row_ptr[j+1]) {
@@ -262,7 +270,7 @@ void ElectrostaticAnalyzer::build_incomplete_cholesky()
 				}
 			}
 
-			// find L_jj (diagonal of j)
+			// 行jの対角成分L(j,j)を探す。
 			double Ljj = 0.0;
 			for (int q = L_row_ptr[j]; q < L_row_ptr[j+1]; ++q) {
 				if (L_col_idx[q] == j) { Ljj = L_values[q]; break; }
@@ -271,7 +279,7 @@ void ElectrostaticAnalyzer::build_incomplete_cholesky()
 			L_values[p] = val / Ljj;
 		}
 
-		// diagonal
+		// 対角成分L(i,i)を計算する。
 		double diag = get_A(i, i);
 		for (int q = L_row_ptr[i]; q < L_row_ptr[i+1]; ++q) {
 			int k = L_col_idx[q];
@@ -279,13 +287,13 @@ void ElectrostaticAnalyzer::build_incomplete_cholesky()
 			diag -= L_values[q] * L_values[q];
 		}
 		if (!std::isfinite(diag) || diag <= 0.0) diag = 1e-30;
-		// set diagonal
+		// 計算した対角成分を格納する。
 		for (int q = L_row_ptr[i]; q < L_row_ptr[i+1]; ++q) {
 			if (L_col_idx[q] == i) { L_values[q] = std::sqrt(diag); break; }
 		}
 	}
 
-	// build CSC for L (columns)
+	// L^Tによる後退代入を効率化するため、LのCSC（列圧縮）形式も作る。
 	L_csc_col_ptr.assign(n + 1, 0);
 	for (size_t idx = 0; idx < L_col_idx.size(); ++idx) {
 		int col = L_col_idx[idx];
@@ -294,7 +302,7 @@ void ElectrostaticAnalyzer::build_incomplete_cholesky()
 	for (int i = 0; i < n; ++i) L_csc_col_ptr[i+1] += L_csc_col_ptr[i];
 	L_csc_row_idx.assign(L_col_idx.size(), 0);
 	L_csc_values.assign(L_values.size(), 0.0);
-	// fill
+	// CSR形式のLをCSC形式へ詰め替える。
 	std::vector<int> fill_pos = L_csc_col_ptr;
 	for (int row = 0; row < n; ++row) {
 		for (int p = L_row_ptr[row]; p < L_row_ptr[row+1]; ++p) {
@@ -333,7 +341,7 @@ void ElectrostaticAnalyzer::apply_ssor_preconditioner(const std::vector<double> 
 
 	std::vector<double> y(n, 0.0);
 
-	// Forward sweep: (D + L) y = r
+	// 前進スイープ：(D + L)y = r を解く。
 	for (int i = 0; i < n; ++i) {
 		double diag = diag_values[i];
 		if (!std::isfinite(diag) || std::fabs(diag) < 1e-30) diag = 1.0;
@@ -347,12 +355,12 @@ void ElectrostaticAnalyzer::apply_ssor_preconditioner(const std::vector<double> 
 		y[i] = sum / diag;
 	}
 
-	// Middle scaling by D
+	// 中間処理として対角行列Dを掛ける。
 	for (int i = 0; i < n; ++i) {
 		y[i] *= diag_values[i];
 	}
 
-	// Backward sweep: (D + U) z = D y
+	// 後退スイープ：(D + U)z = Dy を解く。
 	for (int i = n - 1; i >= 0; --i) {
 		double diag = diag_values[i];
 		if (!std::isfinite(diag) || std::fabs(diag) < 1e-30) diag = 1.0;
@@ -380,7 +388,7 @@ void ElectrostaticAnalyzer::apply_preconditioner(const std::vector<double> &r, s
 		return;
 	}
 	if (!ic_built) {
-		// fallback: diagonal preconditioner
+		// IC(0)を構築できていない場合は、対角前処理へ切り替える。
 		for (int i = 0; i < n; ++i) {
 			double Aii = 0.0;
 			for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i+1]; ++p) if (global_K_col_idx[p] == i) { Aii = global_K_values[p]; break; }
@@ -394,7 +402,7 @@ void ElectrostaticAnalyzer::apply_preconditioner(const std::vector<double> &r, s
 		scaled_r[i] = r[i] * ic_scale[i];
 	}
 
-	// forward solve L * y = r
+	// 前進代入で Ly = r を解く。
 	std::vector<double> y(n, 0.0);
 	for (int i = 0; i < n; ++i) {
 		double s = scaled_r[i];
@@ -408,11 +416,11 @@ void ElectrostaticAnalyzer::apply_preconditioner(const std::vector<double> &r, s
 		y[i] = s / Lii;
 	}
 
-	// backward solve L^T * z = y using CSC
+	// CSC形式を使った後退代入で L^T z = y を解く。
 	for (int col = n - 1; col >= 0; --col) {
 		double s = y[col];
 		double Lii = 1.0;
-		// diagonal in CSC is somewhere in column col at row==col
+		// CSCの列colから、row==colとなる対角成分を探す。
 		for (int p = L_csc_col_ptr[col]; p < L_csc_col_ptr[col+1]; ++p) {
 			int row = L_csc_row_idx[p];
 			if (row == col) { Lii = L_csc_values[p]; break; }
@@ -420,7 +428,7 @@ void ElectrostaticAnalyzer::apply_preconditioner(const std::vector<double> &r, s
 		for (int p = L_csc_col_ptr[col]; p < L_csc_col_ptr[col+1]; ++p) {
 			int row = L_csc_row_idx[p];
 			if (row == col) continue;
-			// L(row,col) contributes to equation for col: subtract L(row,col) * z[row]
+			// L(row,col) * z[row]を現在の式から差し引く。
 			s -= L_csc_values[p] * z[row];
 		}
 		if (std::fabs(Lii) < 1e-30) Lii = 1e-30;
@@ -473,7 +481,7 @@ void ElectrostaticAnalyzer::read_mesh(const char *filename)
 	}
 
 	fclose(fp);
-	// store counts for external getters
+	// 外部公開用のgetterが返す節点数・要素数を保存する。
 	mesh_node_count = num_nodes;
 	mesh_element_count = num_elements;
 	printf("Read mesh: %d nodes, %d elements\n", num_nodes, num_elements);
@@ -591,7 +599,7 @@ void ElectrostaticAnalyzer::read_material_and_bc(const char *filename)
 		}
 	}
 
-	// initialize materials with defaults (sigma = 1, epsilon = 1)
+	// 材料値を初期化する。既定値は導電率・誘電率ともに1とする。
 	materials.assign(ntmate, Material{1.0,1.0,1.0, 1.0,1.0,1.0, 0.0, 0.0});
 	for (int i = 0; i < ntmate && idx < (int)lines.size(); ++i, ++idx) {
 		std::vector<double> vals;
@@ -609,13 +617,13 @@ void ElectrostaticAnalyzer::read_material_and_bc(const char *filename)
 			materials[i].ro = 0.0;
 			materials[i].cv = 0.0;
 		} else {
-			// legacy format: sx sy sz ro [cv]
+			// 旧形式：sx sy sz ro [cv]
 			materials[i].sx = vals[0];
 			materials[i].sy = vals[1];
 			materials[i].sz = vals[2];
 			materials[i].ro = vals[3];
 			materials[i].cv = (vals.size() == 5) ? vals[4] : 0.0;
-			// set default epsilon to 1.0
+			// 旧形式には誘電率がないため、既定値1.0を設定する。
 			materials[i].ex = 1.0;
 			materials[i].ey = 1.0;
 			materials[i].ez = 1.0;
@@ -766,6 +774,8 @@ void ElectrostaticAnalyzer::apply_boundary_conditions()
 
 void ElectrostaticAnalyzer::assemble_global_matrix()
 {
+	// 各四面体要素について局所行列を計算し、全体行列へ加算する。
+	// 出力：K_sigma（導電率）、K_epsilon（誘電率）、F（ソース項）
 	auto t_start = std::chrono::high_resolution_clock::now();
 	const int n = (int)nodes.size();
 	global_K_rows.assign(n, {});
@@ -830,14 +840,15 @@ void ElectrostaticAnalyzer::assemble_global_matrix()
 
 		for (int a = 0; a < 4; ++a) {
 			for (int b = 0; b < 4; ++b) {
-				// anisotropic conductivity contribution
+				// 異方性導電率による局所行列：
+				// ke_sigma = V * (sx*Nax*Nbx + sy*Nay*Nby + sz*Naz*Nbz)
 				double kxx = M.sx * gradN[a][0] * gradN[b][0];
 				double kyy = M.sy * gradN[a][1] * gradN[b][1];
 				double kzz = M.sz * gradN[a][2] * gradN[b][2];
 				double ke_sigma = (kxx + kyy + kzz) * volume;
 				global_K_rows[gid[a]].push_back(std::make_pair(gid[b], ke_sigma));
 
-				// anisotropic permittivity (for time term matrix E)
+				// 時間項で使う異方性誘電率の局所行列K_epsilon。
 				double e_xx = M.ex * gradN[a][0] * gradN[b][0];
 				double e_yy = M.ey * gradN[a][1] * gradN[b][1];
 				double e_zz = M.ez * gradN[a][2] * gradN[b][2];
@@ -857,15 +868,16 @@ void ElectrostaticAnalyzer::assemble_global_matrix()
 
 void ElectrostaticAnalyzer::solve_linear_system()
 {
+	// 現在のglobal_Kとglobal_Fを使って A*phi=b を解く。
+	// 導電率の桁差が大きいモデルでも安定しやすいように、規模やdtに関係なく
+	// IC(0)-CG（ICCG）を使う。SSORは軽いが、強い材料コントラストでは残差が
+	// 下がりにくいことがあるため、この解析では使わない。
 	auto t_start = std::chrono::high_resolution_clock::now();
 	const int n = (int)nodes.size();
 	const bool steady_state = (dt <= 0.0);
-	// IC(0) is more expensive to build than SSOR, but is substantially more robust
-	// for the high conductivity contrast encountered by the steady-state models.
-	const bool use_ssor = (n >= 50000 && !steady_state);
-	const int max_iter = steady_state ? 2000
-		: (use_ssor ? std::max(1000, nstep * 10) : std::max(50, nstep));
-	const double tol = steady_state ? 1e-8 : (use_ssor ? 1e-6 : 1e-10);
+	const bool use_ssor = false;
+	const int max_iter = steady_state ? 2000 : std::max(1000, nstep * 10);
+	const double tol = steady_state ? 1e-8 : 1e-10;
 	use_ssor_preconditioner = use_ssor;
 	last_solver_converged = false;
 	last_solver_relative_residual = 1.0;
@@ -873,37 +885,35 @@ void ElectrostaticAnalyzer::solve_linear_system()
 	std::vector<double> rhs = global_F;
 	apply_dirichlet_constraints(rhs);
 
-	// Symmetric diagonal equilibration for the steady-state system:
-	//   A_s = S A S, b_s = S b, x = S y, S_ii = 1/sqrt(A_ii).
-	// This preserves symmetry and positive definiteness required by CG while
-	// reducing coefficient scale differences before constructing the preconditioner.
+	// 対称対角スケーリングを適用する：
+	//   A_s = S A S, b_s = S b, phi = S y, S_ii = 1/sqrt(A_ii)
+	// CG法に必要な対称性・正定値性を維持しながら、前処理を作る前に
+	// 行列係数の桁差を小さくする。過渡解析でも材料の導電率差は残るため、
+	// 定常解析と同じくスケーリングしてからICCGを使う。
 	std::vector<double> scale(n, 1.0);
-	if (steady_state) {
-		for (int i = 0; i < n; ++i) {
-			double diag = 0.0;
-			for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
-				if (global_K_col_idx[p] == i) {
-					diag = global_K_values[p];
-					break;
-				}
+	for (int i = 0; i < n; ++i) {
+		double diag = 0.0;
+		for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
+			if (global_K_col_idx[p] == i) {
+				diag = global_K_values[p];
+				break;
 			}
-			if (std::isfinite(diag) && diag > 1e-30) scale[i] = 1.0 / std::sqrt(diag);
 		}
-		for (int i = 0; i < n; ++i) {
-			for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
-				global_K_values[p] *= scale[i] * scale[global_K_col_idx[p]];
-			}
-			rhs[i] *= scale[i];
-		}
-		printf("Applied symmetric diagonal scaling; max_iter=%d tol=%.1e\n", max_iter, tol);
+		if (std::isfinite(diag) && diag > 1e-30) scale[i] = 1.0 / std::sqrt(diag);
 	}
+	for (int i = 0; i < n; ++i) {
+		for (int p = global_K_row_ptr[i]; p < global_K_row_ptr[i + 1]; ++p) {
+			global_K_values[p] *= scale[i] * scale[global_K_col_idx[p]];
+		}
+		rhs[i] *= scale[i];
+	}
+	printf("Applied symmetric diagonal scaling; max_iter=%d tol=%.1e\n", max_iter, tol);
 
 	std::vector<double> x(n, 0.0);
 	for (int i = 0; i < n; ++i) x[i] = potentials[i] / scale[i];
 	for (int i = 0; i < n; ++i) {
 		if (fixed_node[i]) x[i] = fixed_value[i] / scale[i];
 	}
-	if (!steady_state) printf("Linear solver limits: max_iter=%d tol=%.1e\n", max_iter, tol);
 
 	if (use_ssor_preconditioner) {
 		preconditioner_diag.assign(n, 0.0);
@@ -921,7 +931,7 @@ void ElectrostaticAnalyzer::solve_linear_system()
 		ic_built = false;
 		printf("Using SSOR preconditioner for n=%d\n", n);
 	} else {
-		// Build IC(0) preconditioner
+		// IC(0)前処理を構築する。
 		build_incomplete_cholesky();
 		printf("Using IC(0) preconditioner for n=%d\n", n);
 	}
@@ -932,7 +942,7 @@ void ElectrostaticAnalyzer::solve_linear_system()
 		r[i] = rhs[i] - Ap[i];
 		if (fixed_node[i]) r[i] = 0.0;
 	}
-	// apply preconditioner z = M^{-1} r
+	// 残差rに前処理を適用し、z = M^{-1}rを求める。
 	apply_preconditioner(r, z);
 	p = z;
 	auto dot = [](const std::vector<double> &a, const std::vector<double> &b) -> double {
@@ -948,7 +958,7 @@ void ElectrostaticAnalyzer::solve_linear_system()
 		last_solver_iterations = 0;
 		last_solver_relative_residual = 0.0;
 		last_solver_converged = true;
-		last_solver_method = use_ssor_preconditioner ? "SSOR-CG" : (steady_state ? "ICCG (scaled)" : "ICCG");
+		last_solver_method = use_ssor_preconditioner ? "SSOR-CG" : "ICCG (scaled)";
 		last_solver_time = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - t_start).count();
 		printf("Converged at iteration 0\n");
 		return;
@@ -975,12 +985,12 @@ void ElectrostaticAnalyzer::solve_linear_system()
 			x[i] += alpha * p[i];
 			r[i] -= alpha * Ap[i];
 			if (fixed_node[i]) {
-				x[i] = fixed_value[i];
+				x[i] = fixed_value[i] / scale[i];
 				r[i] = 0.0;
 			}
 		}
 
-		// check convergence
+		// 初期残差に対する相対残差が許容誤差未満なら収束とする。
 		double rnorm2 = std::sqrt(dot(r, r));
 		iter_done = iter + 1;
 		last_solver_relative_residual = rnorm2 / rnorm0;
@@ -1011,7 +1021,7 @@ void ElectrostaticAnalyzer::solve_linear_system()
 	double elapsed = std::chrono::duration<double>(t_end - t_start).count();
 	last_solver_iterations = iter_done;
 	last_solver_time = elapsed;
-	last_solver_method = use_ssor_preconditioner ? "SSOR-CG" : (steady_state ? "ICCG (scaled)" : "ICCG");
+	last_solver_method = use_ssor_preconditioner ? "SSOR-CG" : "ICCG (scaled)";
 	if (last_solver_converged) {
 		printf("Solved linear system with %s: rel_residual=%.3e (%.6f s)\n",
 			last_solver_method.c_str(), last_solver_relative_residual, elapsed);
@@ -1023,6 +1033,10 @@ void ElectrostaticAnalyzer::solve_linear_system()
 
 void ElectrostaticAnalyzer::solve()
 {
+	// 支配方程式：
+	//   定常解析(dt<=0)：K_sigma * phi = F
+	//   過渡解析(dt>0)：(K_sigma + K_epsilon/dt) * phi^(n+1)
+	//                    = F + (K_epsilon/dt) * phi^n
 	const double conv_tol = 1e-8;
 	printf("Starting electrostatic analysis...\n");
 	final_step = 0;
@@ -1037,6 +1051,9 @@ void ElectrostaticAnalyzer::solve()
 	}
 
 	if (dt <= 0.0) {
+		// --------------------------------------------------------------------
+		// 定常解析：時間項を使わず、導電率行列による方程式を1回だけ解く。
+		// --------------------------------------------------------------------
 		printf("Steady-state solve: dt=%.3e (time term disabled)\n", dt);
 		apply_boundary_conditions();
 		if (std::none_of(fixed_node.begin(), fixed_node.end(), [](bool v) { return v; })) {
@@ -1063,6 +1080,9 @@ void ElectrostaticAnalyzer::solve()
 		return;
 	}
 
+	// ------------------------------------------------------------------------
+	// 過渡解析の準備：境界条件、行列組立、RCM並べ替え
+	// ------------------------------------------------------------------------
 	apply_boundary_conditions();
 	if (std::none_of(fixed_node.begin(), fixed_node.end(), [](bool v) { return v; })) {
 		// 境界固定が無い場合は基準点を1つだけ 0V に固定して特異性を避ける
@@ -1078,7 +1098,8 @@ void ElectrostaticAnalyzer::solve()
 	std::vector<int> perm(n, 0);
 	std::vector<int> inv_perm(n, 0);
 	if (n > 0) {
-		// Reverse Cuthill-McKee ordering on the assembled adjacency.
+		// RCM（Reverse Cuthill-McKee）法で節点を並べ替える。
+		// 非ゼロ成分を対角線付近へ集め、行列の帯幅と前処理コストを抑える。
 		std::vector<int> degree(n, 0);
 		for (int i = 0; i < n; ++i) {
 			int deg = 0;
@@ -1216,13 +1237,42 @@ void ElectrostaticAnalyzer::solve()
 	fixed_value.swap(permuted_fixed_value);
 
 	std::vector<double> base_F = global_F;
+	// RCM後のK_sigmaを「過渡解析の元行列」として保存する。
+	// solve_linear_system()はDirichlet条件やスケーリングをglobal_Kへ直接埋め込むため、
+	// 毎ステップここから復元してから A = K_sigma + K_epsilon/dt を作る。
+	// これにより、K_epsilon/dt がステップごとに二重・三重に加算されることを防ぐ。
+	const std::vector<int> base_K_row_ptr = global_K_row_ptr;
+	const std::vector<int> base_K_col_idx = global_K_col_idx;
+	const std::vector<double> base_K_values = global_K_values;
+
+	auto write_original_order_distribution = [&](const char *filename) {
+		// 計算中のpotentialsはRCM後の節点順なので、tempa.datへ出す直前だけ
+		// 入力メッシュの節点順へ戻す。内部の計算状態はRCM順のまま維持する。
+		std::vector<double> permuted_potentials = potentials;
+		std::vector<double> original_order_potentials(n, 0.0);
+		for (int i = 0; i < n; ++i) {
+			original_order_potentials[perm[i]] = permuted_potentials[i];
+		}
+		potentials.swap(original_order_potentials);
+		write_potential_distribution(filename);
+		potentials.swap(permuted_potentials);
+	};
+
 	printf("Transient solve: dt=%.3e, nstep=%d\n", dt, nstep);
 	step_solver_iterations.clear();
 	step_solver_times.clear();
 
 	std::vector<double> potentials_prev = potentials;
 	for (int step = 0; step < nstep; ++step) {
+		// --------------------------------------------------------------------
+		// Backward Eulerによる時間ステップ
+		//   A   = K_sigma + K_epsilon/dt
+		//   rhs = F + (K_epsilon/dt) * phi^n
+		// --------------------------------------------------------------------
 		std::vector<double> potentials_old = potentials_prev;
+		global_K_row_ptr = base_K_row_ptr;
+		global_K_col_idx = base_K_col_idx;
+		global_K_values = base_K_values;
 		std::vector<int> step_row_ptr;
 		std::vector<int> step_col_idx;
 		std::vector<double> step_values;
@@ -1262,7 +1312,7 @@ void ElectrostaticAnalyzer::solve()
 
 		char outname[64];
 		std::snprintf(outname, sizeof(outname), "%s%03d", step_output_prefix.c_str(), step + 1);
-		write_potential_distribution(outname);
+		write_original_order_distribution(outname);
 
 		final_step = step + 1;
 		final_time = (step + 1) * dt;
@@ -1275,7 +1325,7 @@ void ElectrostaticAnalyzer::solve()
 		}
 	}
 
-	// Restore original node ordering for output/reporting.
+	// RCMで変更した節点順を、入力メッシュの節点順へ戻す。
 	std::vector<double> original_potentials(n, 0.0);
 	for (int i = 0; i < n; ++i) {
 		original_potentials[perm[i]] = potentials[i];
@@ -1294,15 +1344,24 @@ void ElectrostaticAnalyzer::write_analysis_report(const char *filename) const
 		return;
 	}
 
-	fprintf(fp, "Electrostatic FEM Analysis Summary\n");
-	fprintf(fp, "=================================\n\n");
+	fprintf(fp, "Electrostatic FEM Analysis Summary / 静電場FEM解析結果\n");
+	fprintf(fp, "=====================================================\n\n");
+	fprintf(fp, "このファイルの見方\n");
+	fprintf(fp, "------------------\n");
+	fprintf(fp, "- dt <= 0 は定常解析、dt > 0 はBackward Euler法による過渡解析です。\n");
+	fprintf(fp, "- last_solver_converged=yes は、線形ソルバーの相対残差が許容値未満になったことを表します。\n");
+	fprintf(fp, "- converged_early=yes は、時間ステップ間の最大電位差が収束許容値未満になったことを表します。\n");
+	fprintf(fp, "- 電位の単位はV、時間の単位はs、solve_timeの単位はsです。\n\n");
 	fprintf(fp, "Mesh\n");
 	fprintf(fp, "----\n");
+	fprintf(fp, "解析に使用した四面体メッシュの規模です。\n");
 	fprintf(fp, "Nodes: %d\n", (int)nodes.size());
 	fprintf(fp, "Elements: %d\n\n", (int)elements.size());
 
 	fprintf(fp, "Analysis Conditions\n");
 	fprintf(fp, "-------------------\n");
+	fprintf(fp, "時間積分条件と解析全体の終了状態です。\n");
+	fprintf(fp, "analysis_type: %s\n", dt <= 0.0 ? "steady-state（定常解析）" : "transient（過渡解析）");
 	fprintf(fp, "dt: %.6e\n", dt);
 	fprintf(fp, "nstep(max): %d\n", nstep);
 	fprintf(fp, "convergence_tolerance: %.6e\n", 1e-8);
@@ -1311,6 +1370,8 @@ void ElectrostaticAnalyzer::write_analysis_report(const char *filename) const
 	fprintf(fp, "final_max_diff: %.6e\n", final_max_diff);
 	fprintf(fp, "converged_early: %s\n\n", converged_early ? "yes" : "no");
 	fprintf(fp, "solver_method: %s\n", last_solver_method.c_str());
+	fprintf(fp, "  ICCG: 不完全コレスキー前処理付き共役勾配法\n");
+	fprintf(fp, "  scaled: 行列係数の桁差を抑える対称対角スケーリングを適用\n");
 	fprintf(fp, "last_solver_converged: %s\n", last_solver_converged ? "yes" : "no");
 	fprintf(fp, "last_solver_relative_residual: %.6e\n", last_solver_relative_residual);
 	fprintf(fp, "last_solver_iterations: %d\n", last_solver_iterations);
@@ -1318,6 +1379,7 @@ void ElectrostaticAnalyzer::write_analysis_report(const char *filename) const
 
 	fprintf(fp, "Solver Iterations Per Step\n");
 	fprintf(fp, "-------------------------\n");
+	fprintf(fp, "各時間ステップにおける線形ソルバーの反復回数と求解時間です。\n");
 	if (step_solver_iterations.empty()) {
 		fprintf(fp, "(no iteration history)\n\n");
 	} else {
@@ -1331,6 +1393,7 @@ void ElectrostaticAnalyzer::write_analysis_report(const char *filename) const
 
 	fprintf(fp, "Boundary Conditions\n");
 	fprintf(fp, "-------------------\n");
+	fprintf(fp, "sin.datで節点番号を指定した境界条件です。type 1/4はnode1とnode2を固定し、その他は現在の実装ではnode1を固定します。\n");
 	fprintf(fp, "count: %d\n", (int)boundaries.size());
 	for (size_t i = 0; i < boundaries.size(); ++i) {
 		const BoundaryCondition &bc = boundaries[i];
@@ -1341,6 +1404,7 @@ void ElectrostaticAnalyzer::write_analysis_report(const char *filename) const
 
 	fprintf(fp, "Fixed Materials (tmate.dat)\n");
 	fprintf(fp, "---------------------------\n");
+	fprintf(fp, "指定材料に属する節点へ適用した固定電位です。valueの単位はVです。\n");
 	fprintf(fp, "count: %d\n", (int)fixed_materials.size());
 	for (size_t i = 0; i < fixed_materials.size(); ++i) {
 		const FixedMaterialEntry &fm = fixed_materials[i];
@@ -1350,6 +1414,7 @@ void ElectrostaticAnalyzer::write_analysis_report(const char *filename) const
 
 	fprintf(fp, "Material Properties\n");
 	fprintf(fp, "-------------------\n");
+	fprintf(fp, "材料ごとの異方性物性です。sigma=(x,y,z)は導電率、epsilon=(x,y,z)は誘電率です。\n");
 	fprintf(fp, "count: %d\n", (int)materials.size());
 	for (size_t i = 0; i < materials.size(); ++i) {
 		const Material &m = materials[i];
@@ -1360,6 +1425,7 @@ void ElectrostaticAnalyzer::write_analysis_report(const char *filename) const
 
 	fprintf(fp, "Material Block Ranges\n");
 	fprintf(fp, "---------------------\n");
+	fprintf(fp, "要素番号startからendまでに割り当てられた材料IDです（番号は1始まり、両端を含む）。\n");
 	fprintf(fp, "count: %d\n", (int)material_ranges.size());
 	for (size_t i = 0; i < material_ranges.size(); ++i) {
 		const MaterialBlockRange &r = material_ranges[i];
@@ -1386,8 +1452,8 @@ void ElectrostaticAnalyzer::write_potential_distribution(const char *filename)
 			value = 0.0;
 		}
 
-		// Keep the formatted field within 12 characters.
-		// Values that would need a 3-digit exponent are treated as signed zero.
+		// 1つの値を12文字以内に収める。
+		// 指数部が3桁必要な値は、符号付きゼロとして出力する。
 		if (std::fabs(value) < 1.0e-99) {
 			std::snprintf(buf, sizeof(buf), "%s0.0000E+00", std::signbit(value) ? "-" : " ");
 		} else {
