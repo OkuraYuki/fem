@@ -38,6 +38,18 @@ static std::string trim(const std::string &text)
 
 static std::string join_path(const std::string &lhs, const std::string &rhs);  // Forward declaration
 
+static ModelSpec make_model_spec(const std::string &name)
+{
+	ModelSpec spec;
+	spec.name = name;
+	spec.mesh_file = join_path("models", join_path(spec.name, "in.dat"));
+	spec.material_file = join_path("models", join_path(spec.name, "sin.dat"));
+	spec.initial_file = join_path("models", join_path(spec.name, "tmate.dat"));
+	spec.config_file = join_path("models", join_path(spec.name, "sina.dat.t"));
+	spec.output_dir = join_path("output", spec.name);
+	return spec;
+}
+
 static std::vector<ModelSpec> load_model_specs(const char *filename)
 {
 	std::vector<ModelSpec> specs;
@@ -49,13 +61,7 @@ static std::vector<ModelSpec> load_model_specs(const char *filename)
 		line = trim(line);
 		if (line.empty() || line[0] == '#') continue;
 
-		ModelSpec spec;
-		spec.name = line;
-		spec.mesh_file = join_path("models", join_path(spec.name, "in.dat"));
-		spec.material_file = join_path("models", join_path(spec.name, "sin.dat"));
-		spec.initial_file = join_path("models", join_path(spec.name, "tmate.dat"));
-		spec.config_file = join_path("models", join_path(spec.name, "sina.dat.t"));
-		spec.output_dir = join_path("output", spec.name);
+		ModelSpec spec = make_model_spec(line);
 
 		if (!file_exists(spec.mesh_file.c_str())) {
 			printf("Model '%s': mesh file not found at %s\n", spec.name.c_str(), spec.mesh_file.c_str());
@@ -156,6 +162,16 @@ int main(int argc, char **argv)
 	const char *model_filter = (argc >= 3) ? argv[2] : nullptr;
 
 	if (manifest) {
+		if (argc == 2 && !file_exists(manifest)) {
+			ModelSpec spec = make_model_spec(manifest);
+			if (!file_exists(spec.mesh_file.c_str())) {
+				printf("Cannot open manifest '%s' and model '%s' was not found at %s\n",
+					manifest, spec.name.c_str(), spec.mesh_file.c_str());
+				return 1;
+			}
+			return run_one_model(spec, true, nullptr);
+		}
+
 		std::vector<ModelSpec> specs = load_model_specs(manifest);
 		if (specs.empty()) {
 			printf("Cannot open or empty manifest: %s\n", manifest);
