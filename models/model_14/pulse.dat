@@ -1,0 +1,3 @@
+# material_id v_low(V) v_high(V) t_rise(s) t_high(s) t_fall(s) t_low(s) phase(s)
+# material 1 remains at 0 V from tmate.dat; material 2 is the pulsed electrode.
+2 0.0 1.0 3.0e-9 20.0e-9 3.0e-9 30.0e-9 0.0

@@ -16,6 +16,7 @@ struct ModelSpec {
 	std::string mesh_file;
 	std::string material_file;
 	std::string initial_file;
+	std::string pulse_file;
 	std::string config_file;
 	std::string output_dir;
 };
@@ -45,6 +46,7 @@ static ModelSpec make_model_spec(const std::string &name)
 	spec.mesh_file = join_path("models", join_path(spec.name, "in.dat"));
 	spec.material_file = join_path("models", join_path(spec.name, "sin.dat"));
 	spec.initial_file = join_path("models", join_path(spec.name, "tmate.dat"));
+	spec.pulse_file = join_path("models", join_path(spec.name, "pulse.dat"));
 	spec.config_file = join_path("models", join_path(spec.name, "sina.dat.t"));
 	spec.output_dir = join_path("output", spec.name);
 	return spec;
@@ -130,6 +132,9 @@ static int run_one_model(const ModelSpec &spec, bool batch_mode, std::ofstream *
 	}
 	analyzer.read_material_and_bc(spec.material_file.c_str());
 	analyzer.read_initial_potential(spec.initial_file.c_str());
+	if (file_exists(spec.pulse_file.c_str())) {
+		analyzer.read_pulse_config(spec.pulse_file.c_str());
+	}
 	analyzer.read_analysis_config(spec.config_file.c_str());
 	analyzer.solve();
 
@@ -216,6 +221,7 @@ int main(int argc, char **argv)
 	spec.mesh_file = "in.dat";
 	spec.material_file = "sin.dat";
 	spec.initial_file = "tmate.dat";
+	spec.pulse_file = "pulse.dat";
 	spec.config_file = file_exists("sina.dat.t") ? "sina.dat.t" : "sina.dat";
 	return run_one_model(spec, false, nullptr);
 }
