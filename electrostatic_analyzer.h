@@ -37,6 +37,18 @@ struct FixedMaterialEntry {
 	double value;
 };
 
+struct PulseVoltageEntry {
+	int material_id;
+	double v_low;
+	double v_high;
+	double t_rise;
+	double t_high;
+	double t_fall;
+	double t_low;
+	double phase;
+	std::vector<int> nodes;
+};
+
 class ElectrostaticAnalyzer {
 private:
 	int mesh_node_count;
@@ -47,6 +59,7 @@ private:
 	std::vector<BoundaryCondition> boundaries;
 	std::vector<MaterialBlockRange> material_ranges;
 	std::vector<FixedMaterialEntry> fixed_materials;
+	std::vector<PulseVoltageEntry> pulse_voltages;
 
 	std::vector<double> potentials;
 	std::vector<double> current_sources;
@@ -109,6 +122,8 @@ private:
 	void matvec_csr(const std::vector<int> &row_ptr, const std::vector<int> &col_idx,
 		const std::vector<double> &values, const std::vector<double> &x, std::vector<double> &y) const;
 	void write_analysis_report(const char *filename) const;
+	double evaluate_pulse_voltage(const PulseVoltageEntry &pulse, double time) const;
+	void apply_pulse_voltages(double time);
 	// 不完全コレスキー分解IC(0)による前処理
 	void build_incomplete_cholesky();
 	void apply_ssor_preconditioner(const std::vector<double> &r, std::vector<double> &z) const;
@@ -122,6 +137,7 @@ public:
 	void read_mesh(const char *filename);                // in.dat
 	void read_material_and_bc(const char *filename);     // sin.dat / thermo.dat
 	void read_initial_potential(const char *filename);   // tmate.dat
+	void read_pulse_config(const char *filename);        // pulse.dat
 	void read_analysis_config(const char *filename);     // sina.dat
 	void write_potential_distribution(const char *filename); // tempa.dat001
 

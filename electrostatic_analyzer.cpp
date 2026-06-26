@@ -695,6 +695,110 @@ void ElectrostaticAnalyzer::read_initial_potential(const char *filename)
 	printf("Read initial potential: %d entries\n", ninit);
 }
 
+void ElectrostaticAnalyzer::read_pulse_config(const char *filename)
+{
+	FILE *fp = fopen(filename, "r");
+	if (!fp) {
+		printf("Cannot open %s\n", filename);
+		return;
+	}
+
+	pulse_voltages.clear();
+	char buf[1024];
+	int line_no = 0;
+	while (fgets(buf, sizeof(buf), fp)) {
+		++line_no;
+		std::string line(buf);
+		size_t comment = line.find('#');
+		if (comment != std::string::npos) line = line.substr(0, comment);
+		bool all_space = true;
+		for (char c : line) {
+			if (!isspace((unsigned char)c)) {
+				all_space = false;
+				break;
+			}
+		}
+		if (all_space) continue;
+
+		int mat_id_raw = 0;
+		PulseVoltageEntry pulse;
+		pulse.phase = 0.0;
+		int nread = std::sscanf(line.c_str(), "%d %lf %lf %lf %lf %lf %lf %lf",
+			&mat_id_raw, &pulse.v_low, &pulse.v_high, &pulse.t_rise,
+			&pulse.t_high, &pulse.t_fall, &pulse.t_low, &pulse.phase);
+		if (nread != 7 && nread != 8) {
+			printf("Invalid pulse record at line %d in %s\n", line_no, filename);
+			continue;
+		}
+		pulse.material_id = mat_id_raw - 1;
+		if (pulse.material_id < 0) {
+			printf("Invalid pulse material id at line %d in %s\n", line_no, filename);
+			continue;
+		}
+		if (pulse.t_rise < 0.0 || pulse.t_high < 0.0 || pulse.t_fall < 0.0 || pulse.t_low < 0.0) {
+			printf("Invalid negative pulse duration at line %d in %s\n", line_no, filename);
+			continue;
+		}
+
+		for (size_t e = 0; e < elements.size(); ++e) {
+			if (elements[e].material == pulse.material_id) {
+				for (int k = 0; k < 4; ++k) {
+					int node = elements[e].nodes[k];
+					if (0 <= node && node < (int)nodes.size()) {
+						pulse.nodes.push_back(node);
+						add_fixed_node(node, pulse.v_low, true);
+					}
+				}
+			}
+		}
+		std::sort(pulse.nodes.begin(), pulse.nodes.end());
+		pulse.nodes.erase(std::unique(pulse.nodes.begin(), pulse.nodes.end()), pulse.nodes.end());
+		pulse_voltages.push_back(pulse);
+	}
+
+	fclose(fp);
+	printf("Read pulse config: %d entries\n", (int)pulse_voltages.size());
+}
+
+double ElectrostaticAnalyzer::evaluate_pulse_voltage(const PulseVoltageEntry &pulse, double time) const
+{
+	const double period = pulse.t_rise + pulse.t_high + pulse.t_fall + pulse.t_low;
+	if (period <= 0.0) return pulse.v_low;
+
+	double t = std::fmod(time - pulse.phase, period);
+	if (t < 0.0) t += period;
+
+	if (pulse.t_rise > 0.0 && t < pulse.t_rise) {
+		double a = t / pulse.t_rise;
+		return pulse.v_low + (pulse.v_high - pulse.v_low) * a;
+	}
+	t -= pulse.t_rise;
+
+	if (t < pulse.t_high) return pulse.v_high;
+	t -= pulse.t_high;
+
+	if (pulse.t_fall > 0.0 && t < pulse.t_fall) {
+		double a = t / pulse.t_fall;
+		return pulse.v_high + (pulse.v_low - pulse.v_high) * a;
+	}
+
+	return pulse.v_low;
+}
+
+void ElectrostaticAnalyzer::apply_pulse_voltages(double time)
+{
+	for (const PulseVoltageEntry &pulse : pulse_voltages) {
+		double value = evaluate_pulse_voltage(pulse, time);
+		for (int node : pulse.nodes) {
+			if (0 <= node && node < (int)fixed_value.size()) {
+				fixed_node[node] = true;
+				fixed_value[node] = value;
+				if (node < (int)potentials.size()) potentials[node] = value;
+			}
+		}
+	}
+}
+
 void ElectrostaticAnalyzer::read_analysis_config(const char *filename)
 {
 	FILE *fp = fopen(filename, "r");
@@ -1043,6 +1147,7 @@ void ElectrostaticAnalyzer::solve()
 	final_time = 0.0;
 	final_max_diff = 0.0;
 	converged_early = false;
+	const bool use_pulse_voltages = !pulse_voltages.empty();
 
 	potentials.assign(nodes.size(), 0.0);
 	if (fixed_node.size() != nodes.size()) {
@@ -1084,6 +1189,9 @@ void ElectrostaticAnalyzer::solve()
 	// 過渡解析の準備：境界条件、行列組立、RCM並べ替え
 	// ------------------------------------------------------------------------
 	apply_boundary_conditions();
+	if (use_pulse_voltages) {
+		apply_pulse_voltages(0.0);
+	}
 	if (std::none_of(fixed_node.begin(), fixed_node.end(), [](bool v) { return v; })) {
 		// 境界固定が無い場合は基準点を1つだけ 0V に固定して特異性を避ける
 		if (!fixed_node.empty()) {
@@ -1236,6 +1344,12 @@ void ElectrostaticAnalyzer::solve()
 	permute_vector(fixed_value, permuted_fixed_value);
 	fixed_value.swap(permuted_fixed_value);
 
+	for (PulseVoltageEntry &pulse : pulse_voltages) {
+		for (int &node : pulse.nodes) {
+			if (0 <= node && node < n) node = inv_perm[node];
+		}
+	}
+
 	std::vector<double> base_F = global_F;
 	// RCM後のK_sigmaを「過渡解析の元行列」として保存する。
 	// solve_linear_system()はDirichlet条件やスケーリングをglobal_Kへ直接埋め込むため、
@@ -1259,6 +1373,9 @@ void ElectrostaticAnalyzer::solve()
 	};
 
 	printf("Transient solve: dt=%.3e, nstep=%d\n", dt, nstep);
+	if (use_pulse_voltages) {
+		printf("Pulse voltage enabled: early convergence disabled; running all %d steps.\n", nstep);
+	}
 	step_solver_iterations.clear();
 	step_solver_times.clear();
 
@@ -1270,6 +1387,9 @@ void ElectrostaticAnalyzer::solve()
 		//   rhs = F + (K_epsilon/dt) * phi^n
 		// --------------------------------------------------------------------
 		std::vector<double> potentials_old = potentials_prev;
+		if (use_pulse_voltages) {
+			apply_pulse_voltages((step + 1) * dt);
+		}
 		global_K_row_ptr = base_K_row_ptr;
 		global_K_col_idx = base_K_col_idx;
 		global_K_values = base_K_values;
@@ -1290,6 +1410,9 @@ void ElectrostaticAnalyzer::solve()
 		}
 
 		potentials = potentials_prev;
+		if (use_pulse_voltages) {
+			apply_pulse_voltages((step + 1) * dt);
+		}
 		solve_linear_system();
 		potentials_prev = potentials;
 		step_solver_iterations.push_back(last_solver_iterations);
@@ -1318,7 +1441,7 @@ void ElectrostaticAnalyzer::solve()
 		final_time = (step + 1) * dt;
 		final_max_diff = max_diff;
 
-		if (max_diff < conv_tol) {
+		if (!use_pulse_voltages && max_diff < conv_tol) {
 			printf("Converged at step %d: max_diff=%.6e < tol=%.6e\n", step + 1, max_diff, conv_tol);
 			converged_early = true;
 			break;
@@ -1409,6 +1532,19 @@ void ElectrostaticAnalyzer::write_analysis_report(const char *filename) const
 	for (size_t i = 0; i < fixed_materials.size(); ++i) {
 		const FixedMaterialEntry &fm = fixed_materials[i];
 		fprintf(fp, "%zu: material_id=%d value=%.6e\n", i + 1, fm.material_id + 1, fm.value);
+	}
+	fprintf(fp, "\n");
+
+	fprintf(fp, "Pulse Voltages (pulse.dat)\n");
+	fprintf(fp, "--------------------------\n");
+	fprintf(fp, "指定材料に属する固定節点へ適用した台形パルス電位です。pulse.datがある場合、時間ステップ間の早期収束判定は無効です。\n");
+	fprintf(fp, "format: material_id v_low v_high t_rise t_high t_fall t_low [phase]\n");
+	fprintf(fp, "count: %d\n", (int)pulse_voltages.size());
+	for (size_t i = 0; i < pulse_voltages.size(); ++i) {
+		const PulseVoltageEntry &pulse = pulse_voltages[i];
+		fprintf(fp, "%zu: material_id=%d v_low=%.6e v_high=%.6e t_rise=%.6e t_high=%.6e t_fall=%.6e t_low=%.6e phase=%.6e nodes=%d\n",
+			i + 1, pulse.material_id + 1, pulse.v_low, pulse.v_high, pulse.t_rise,
+			pulse.t_high, pulse.t_fall, pulse.t_low, pulse.phase, (int)pulse.nodes.size());
 	}
 	fprintf(fp, "\n");
 
