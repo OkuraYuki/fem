@@ -1,0 +1,69 @@
+{
+  "cases": [
+    {
+      "case": "base",
+      "expected_steps": 150,
+      "snapshot_count": 150,
+      "csv_rows": 150,
+      "summary_converged": true
+    },
+    {
+      "case": "dt05",
+      "expected_steps": 150,
+      "snapshot_count": 150,
+      "csv_rows": 150,
+      "summary_converged": true
+    },
+    {
+      "case": "dt025",
+      "expected_steps": 300,
+      "snapshot_count": 300,
+      "csv_rows": 300,
+      "summary_converged": true
+    },
+    {
+      "case": "delay",
+      "expected_steps": 155,
+      "snapshot_count": 155,
+      "csv_rows": 155,
+      "summary_converged": true
+    },
+    {
+      "case": "rise5",
+      "expected_steps": 155,
+      "snapshot_count": 155,
+      "csv_rows": 155,
+      "summary_converged": true
+    },
+    {
+      "case": "fall5",
+      "expected_steps": 150,
+      "snapshot_count": 150,
+      "csv_rows": 150,
+      "summary_converged": true
+    },
+    {
+      "case": "fall20",
+      "expected_steps": 150,
+      "snapshot_count": 150,
+      "csv_rows": 150,
+      "summary_converged": true
+    },
+    {
+      "case": "high10",
+      "expected_steps": 150,
+      "snapshot_count": 150,
+      "csv_rows": 150,
+      "summary_converged": true
+    },
+    {
+      "case": "high50",
+      "expected_steps": 150,
+      "snapshot_count": 150,
+      "csv_rows": 150,
+      "summary_converged": true
+    }
+  ],
+  "original_input_hashes_unchanged": true,
+  "report_links_exist": true
+}

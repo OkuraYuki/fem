@@ -1,0 +1,13 @@
+{
+  "nodes_compared": 363759,
+  "max_abs_difference_over_mesh_V": 0.0,
+  "probe_max_abs_difference_V": 0.0,
+  "installed_cli_probe_V": [
+    0.74768,
+    0.37317,
+    0.17017,
+    0.051735,
+    0.0095134
+  ],
+  "warnings": 0
+}

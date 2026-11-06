@@ -1,0 +1,7 @@
+nodes 363759
+elements 2095200
+initial_Ksigma_free_max_SI    5.5561839609297886E-07
+initial_Kepsilon_free_max_SI    1.0368838225322913E-22
+off25_residual_free_max_SI    1.1081413564539844E-13
+off25_rhs_free_max_SI    5.7930501750399349E-06
+off25_residual_free_L2_over_rhs_L2    1.9252824328945942E-07

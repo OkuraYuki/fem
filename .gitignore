@@ -1,0 +1,5 @@
+/build/
+/bin/fem
+/bin/fem.exe
+__pycache__/
+*.pyc

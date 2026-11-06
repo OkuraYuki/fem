@@ -1,0 +1,32 @@
+[
+  {
+    "case": "valid",
+    "passed": true,
+    "returncode": 0,
+    "directory": "/tmp/fem-cli-valid-z6a92wkf"
+  },
+  {
+    "case": "time0",
+    "passed": true,
+    "returncode": 0,
+    "directory": "/tmp/fem-cli-time0-i3go9tr7"
+  },
+  {
+    "case": "bad_config",
+    "passed": true,
+    "returncode": 1,
+    "directory": "/tmp/fem-cli-bad_config-6lowp3rk"
+  },
+  {
+    "case": "nonzero_flux",
+    "passed": true,
+    "returncode": 1,
+    "directory": "/tmp/fem-cli-nonzero_flux-wpdwpnux"
+  },
+  {
+    "case": "unsupported_bc",
+    "passed": true,
+    "returncode": 1,
+    "directory": "/tmp/fem-cli-unsupported_bc-tygzn1e1"
+  }
+]

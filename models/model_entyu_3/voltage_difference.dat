@@ -1,0 +1,3 @@
+# node_a node_b label
+# Reported difference is V(node_b) - V(node_a).
+180676 181561 electrode_voltage

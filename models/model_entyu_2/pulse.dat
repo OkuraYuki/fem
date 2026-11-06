@@ -1,0 +1,3 @@
+# Single-pulse validation: 25 ns high, 5 ns linear fall, then low.
+# material_id v_low v_high t_rise t_high t_fall t_low phase
+1 0.0 1.0 0.0 25.0e-9 5.0e-9 170.0e-9 0.0

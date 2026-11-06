@@ -1,0 +1,82 @@
+Electrostatic FEM Analysis Summary / 静電場FEM解析結果
+=====================================================
+
+このファイルの見方
+------------------
+- dt <= 0 は定常解析、dt > 0 はBackward Euler法による過渡解析です。
+- last_solver_converged=yes は、線形ソルバーの相対残差が許容値未満になったことを表します。
+- converged_early=yes は、時間ステップ間の最大電位差が収束許容値未満になったことを表します。
+- 電位の単位はV、時間の単位はs、solve_timeの単位はsです。
+
+Mesh
+----
+解析に使用した四面体メッシュの規模です。
+Nodes: 4
+Elements: 1
+
+axial_symmetry: disabled
+solver_degrees_of_freedom: 4
+
+Analysis Conditions
+-------------------
+時間積分条件と解析全体の終了状態です。
+analysis_type: transient（過渡解析）
+dt: 1.000000e-09
+time0: 0.000000e+00
+nstep(max): 10
+convergence_tolerance: 1.000000e-08
+final_step: 1
+final_time: 1.000000e-09
+final_max_diff: 5.551115e-17
+converged_early: yes
+
+solver_method: ICCG (scaled)
+  ICCG: 不完全コレスキー前処理付き共役勾配法
+  scaled: 行列係数の桁差を抑える対称対角スケーリングを適用
+last_solver_converged: yes
+last_solver_relative_residual: 0.000000e+00
+last_solver_iterations: 1
+last_solver_time_sec: 1.413000e-06
+
+Solver Iterations Per Step
+-------------------------
+各時間ステップにおける線形ソルバーの反復回数と求解時間です。
+step,iterations,solve_time_sec
+1,1,1.413000e-06
+
+Voltage Differences Per Step
+----------------------------
+voltage_difference.datで指定した2接点間の電位差です。difference_V = V(node_b) - V(node_a)です。
+label: free_node
+node_a: 3
+node_b: 1
+step,time_s,node_a_V,node_b_V,difference_V,absolute_difference_V
+1,1.000000e-09,0.000000e+00,3.333333e-01,3.333333e-01,3.333333e-01
+
+Boundary Conditions
+-------------------
+sin.datで節点番号を指定した境界条件です。type 1/4はnode1とnode2を固定し、type 5の値0は零流束の自然境界です。その他の条件は未対応のためエラーになります。
+count: 1
+1: node1=1 node2=2 type=5 value=0.000000e+00
+
+Fixed Materials (tmate.dat)
+---------------------------
+指定材料に属する節点へ適用した固定電位です。valueの単位はVです。
+count: 0
+
+Pulse Voltages (pulse.dat)
+--------------------------
+台形または矩形パルス電位です。回路対象材料では電源側の波形として使い、電極電位は回路とFEMから計算します。その他の材料では固定電位として適用します。早期収束判定は無効です。
+format: material_id v_low v_high t_rise t_high t_fall t_low [phase]
+count: 0
+
+Material Properties
+-------------------
+材料ごとの異方性物性です。sigma=(x,y,z)は導電率、epsilon=(x,y,z)は誘電率です。
+count: 1
+1: sigma=(1.000000e-02, 1.000000e-02, 1.000000e-02) epsilon=(1.000000e-10, 1.000000e-10, 1.000000e-10)
+
+Material Block Ranges
+---------------------
+要素番号startからendまでに割り当てられた材料IDです（番号は1始まり、両端を含む）。
+count: 0

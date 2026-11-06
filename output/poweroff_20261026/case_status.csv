@@ -1,0 +1,10 @@
+case,completed,last_step,expected_steps,warnings
+base,True,150,150,0
+dt05,True,150,150,0
+dt025,True,300,300,0
+delay,True,155,155,0
+rise5,True,155,155,0
+fall5,True,150,150,0
+fall20,True,150,150,0
+high10,True,150,150,0
+high50,True,150,150,0

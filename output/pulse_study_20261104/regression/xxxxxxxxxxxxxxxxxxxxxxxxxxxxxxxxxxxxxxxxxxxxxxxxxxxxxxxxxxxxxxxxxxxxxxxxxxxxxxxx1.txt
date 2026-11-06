@@ -1,0 +1,106 @@
+Electrostatic FEM Analysis Summary / 静電場FEM解析結果
+=====================================================
+
+このファイルの見方
+------------------
+- dt <= 0 は定常解析、dt > 0 はBackward Euler法による過渡解析です。
+- last_solver_converged=yes は、線形ソルバーの相対残差が許容値未満になったことを表します。
+- converged_early=yes は、時間ステップ間の最大電位差が収束許容値未満になったことを表します。
+- 電位の単位はV、時間の単位はs、solve_timeの単位はsです。
+
+Mesh
+----
+解析に使用した四面体メッシュの規模です。
+Nodes: 4
+Elements: 1
+
+axial_symmetry: disabled
+solver_degrees_of_freedom: 4
+
+Analysis Conditions
+-------------------
+時間積分条件と解析全体の終了状態です。
+analysis_type: transient（過渡解析）
+dt: 1.000000e-09
+time0: 0.000000e+00
+nstep(max): 10
+convergence_tolerance: 1.000000e-08
+final_step: 10
+final_time: 1.000000e-08
+final_max_diff: 0.000000e+00
+converged_early: no
+
+solver_method: ICCG (scaled)
+  ICCG: 不完全コレスキー前処理付き共役勾配法
+  scaled: 行列係数の桁差を抑える対称対角スケーリングを適用
+last_solver_converged: yes
+last_solver_relative_residual: 0.000000e+00
+last_solver_iterations: 0
+last_solver_time_sec: 1.157000e-06
+
+Solver Iterations Per Step
+-------------------------
+各時間ステップにおける線形ソルバーの反復回数と求解時間です。
+step,iterations,solve_time_sec
+1,1,2.189000e-06
+2,0,1.725000e-06
+3,0,1.265000e-06
+4,1,6.291000e-06
+5,0,1.241000e-06
+6,0,1.119000e-06
+7,0,1.130000e-06
+8,0,1.164000e-06
+9,0,1.213000e-06
+10,0,1.157000e-06
+
+Voltage Differences Per Step
+----------------------------
+voltage_difference.datで指定した2接点間の電位差です。difference_V = V(node_b) - V(node_a)です。
+label: free_node
+node_a: 3
+node_b: 1
+step,time_s,node_a_V,node_b_V,difference_V,absolute_difference_V
+1,1.000000e-09,0.000000e+00,3.333333e-01,3.333333e-01,3.333333e-01
+2,2.000000e-09,0.000000e+00,3.333333e-01,3.333333e-01,3.333333e-01
+3,3.000000e-09,0.000000e+00,3.333333e-01,3.333333e-01,3.333333e-01
+4,4.000000e-09,0.000000e+00,0.000000e+00,0.000000e+00,0.000000e+00
+5,5.000000e-09,0.000000e+00,0.000000e+00,0.000000e+00,0.000000e+00
+6,6.000000e-09,0.000000e+00,0.000000e+00,0.000000e+00,0.000000e+00
+7,7.000000e-09,0.000000e+00,0.000000e+00,0.000000e+00,0.000000e+00
+8,8.000000e-09,0.000000e+00,0.000000e+00,0.000000e+00,0.000000e+00
+9,9.000000e-09,0.000000e+00,0.000000e+00,0.000000e+00,0.000000e+00
+10,1.000000e-08,0.000000e+00,0.000000e+00,0.000000e+00,0.000000e+00
+
+Boundary Conditions
+-------------------
+sin.datで節点番号を指定した境界条件です。type 1/4はnode1とnode2を固定し、type 5の値0は零流束の自然境界です。その他の条件は未対応のためエラーになります。
+count: 1
+1: node1=1 node2=2 type=5 value=0.000000e+00
+
+Fixed Materials (tmate.dat)
+---------------------------
+指定材料に属する節点へ適用した固定電位です。valueの単位はVです。
+count: 0
+
+Pulse Voltages (pulse.dat)
+--------------------------
+台形または矩形パルス電位です。回路対象材料では電源側の波形として使い、電極電位は回路とFEMから計算します。その他の材料では固定電位として適用します。早期収束判定は無効です。
+format: material_id v_low v_high t_rise t_high t_fall t_low [phase]
+count: 1
+1: material_id=1 v_low=0.000000e+00 v_high=1.000000e+00 t_rise=0.000000e+00 t_high=3.000000e-09 t_fall=0.000000e+00 t_low=1.000000e-07 phase=1.000000e-09 nodes=1
+   waveform_type: square（矩形波）
+   period: 1.030000e-07 s (103.000000 ns)
+   frequency: 9.708738e+06 Hz
+   duty_cycle: 2.913 %
+   cycle_timeline: rise=[0, 0.000000) ns, high=[0.000000, 3.000000) ns, fall=[3.000000, 3.000000) ns, low=[3.000000, 103.000000) ns
+
+Material Properties
+-------------------
+材料ごとの異方性物性です。sigma=(x,y,z)は導電率、epsilon=(x,y,z)は誘電率です。
+count: 1
+1: sigma=(1.000000e-02, 1.000000e-02, 1.000000e-02) epsilon=(1.000000e-10, 1.000000e-10, 1.000000e-10)
+
+Material Block Ranges
+---------------------
+要素番号startからendまでに割り当てられた材料IDです（番号は1始まり、両端を含む）。
+count: 0

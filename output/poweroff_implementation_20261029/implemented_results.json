@@ -1,0 +1,41 @@
+{
+  "cases": [
+    {
+      "case": "model_entyu_open",
+      "steps": 150,
+      "warnings": 0,
+      "minimum_over_steps_V": 0.0,
+      "r100_25ns_V": 0.74768,
+      "r100_26ns_V": 0.67971,
+      "r100_50ns_V": 0.069007,
+      "r100_150ns_V": 5.0076e-06
+    },
+    {
+      "case": "model_entyu_fall_sym",
+      "steps": 150,
+      "warnings": 0,
+      "minimum_over_steps_V": -2.264672e-11,
+      "r100_25ns_V": 0.74768,
+      "r100_26ns_V": 0.71029,
+      "r100_50ns_V": -5.3729e-13,
+      "r100_150ns_V": -3.8989e-17
+    },
+    {
+      "case": "model_entyu_clamp_sym",
+      "steps": 150,
+      "warnings": 0,
+      "minimum_over_steps_V": -4.807356e-11,
+      "r100_25ns_V": -1.6375e-12,
+      "r100_26ns_V": -1.4886e-12,
+      "r100_50ns_V": -1.5113e-13,
+      "r100_150ns_V": -1.0967e-17
+    }
+  ],
+  "open_BE_max_abs_electrode_voltage_error": 1.9984014443252818e-14,
+  "open_voltage_at_disconnect_V": 1.0,
+  "open_voltage_at_150ns_V": 6.697525182556384e-06,
+  "effective_capacitance_F": 2.185195723905246e-10,
+  "effective_medium_resistance_ohm": 45.76249116087698,
+  "reference_time_constant_s": 1e-08,
+  "raw_values_were_not_clipped": true
+}

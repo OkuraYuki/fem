@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-29",
+  "files_sha256": {
+    "electrostatic_analyzer.cpp": "2430f754c0ea1ab205a0882dff969ddd1b9d3a5a5c147dc660b1250409ebc56b",
+    "electrostatic_analyzer.h": "b739e7606be3600a6436a428a8fcd04c1e27603bcc1cf65670c4622454a17373",
+    "tools/poweroff_operator_probe.cpp": "55e7dfc8ed53f6c709574ec079719a06835c6a72883c78deb5665b8838eeb4ba",
+    "tools/fortran_full_residual.f90": "ded3805f3fa25f3f48021671df41e5df9d81ff99cb1d67e2bd37691cf888fdf1",
+    "tools/compare_fortran_elements.cpp": "d6b48f6e40b83cf33e822e56f4f0c013ac8bbe1dfcc27496ddd0c7d7e200d8dc"
+  },
+  "fortran_reference_root": "/home/ohkura/program/femeemt.ver5.4.2+ohkura_2"
+}

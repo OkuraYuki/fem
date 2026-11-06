@@ -1,0 +1,8 @@
+{
+  "layer_tetrahedra": 13968,
+  "boundary_faces": 9632,
+  "end_faces": 9312,
+  "outer_side_faces": 320,
+  "unmatched_internal_side_faces": 0,
+  "faces_more_than_two_tetrahedra": 0
+}

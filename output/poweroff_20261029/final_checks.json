@@ -1,0 +1,7 @@
+{
+  "production_sources_unchanged_this_investigation": true,
+  "report_links_exist": true,
+  "five_cases_passed": true,
+  "fortran_64_elements_compared": true,
+  "fortran_full_mesh_residual_evaluated": true
+}

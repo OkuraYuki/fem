@@ -1,0 +1,6 @@
+model_name,mesh_file,material_file,initial_file,config_file,output_dir,nodes,elements,boundaries,fixed_materials,materials,final_step,final_time,final_max_diff,converged_early
+model_entyu,models/model_entyu/in.dat,models/model_entyu/sin.dat,models/model_entyu/tmate.dat,models/model_entyu/sina.dat.t,output/model_entyu,363759,2095200,160,2,3,150,1.5e-07,1,no
+model_entyu_1,models/model_entyu_1/in.dat,models/model_entyu_1/sin.dat,models/model_entyu_1/tmate.dat,models/model_entyu_1/sina.dat.t,output/model_entyu_1,363759,2095200,160,1,3,150,1.5e-07,4.2444e-17,no
+model_entyu_2,models/model_entyu_2/in.dat,models/model_entyu_2/sin.dat,models/model_entyu_2/tmate.dat,models/model_entyu_2/sina.dat.t,output/model_entyu_2,363759,2095200,160,1,3,150,1.5e-07,5.64914e-17,no
+model_entyu_3,models/model_entyu_3/in.dat,models/model_entyu_3/sin.dat,models/model_entyu_3/tmate.dat,models/model_entyu_3/sina.dat.t,output/model_entyu_3,363759,2095200,160,1,3,150,1.5e-07,1.30469e-16,no
+model_entyu_teijo,models/model_entyu_teijo/in.dat,models/model_entyu_teijo/sin.dat,models/model_entyu_teijo/tmate.dat,models/model_entyu_teijo/sina.dat.t,output/model_entyu_teijo,363759,2095200,160,2,3,1,0,0,no

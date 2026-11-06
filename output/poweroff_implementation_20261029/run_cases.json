@@ -1,0 +1,17 @@
+[
+  {
+    "model": "model_entyu_open",
+    "output": "output/model_entyu_open",
+    "command": "./fem model_entyu_open"
+  },
+  {
+    "model": "model_entyu_fall_sym",
+    "output": "output/model_entyu_fall_sym",
+    "command": "./fem model_entyu_fall_sym"
+  },
+  {
+    "model": "model_entyu_clamp_sym",
+    "output": "output/model_entyu_clamp_sym",
+    "command": "./fem model_entyu_clamp_sym"
+  }
+]

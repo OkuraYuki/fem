@@ -1,0 +1,50 @@
+[
+  {
+    "case": "valid",
+    "passed": true,
+    "exit_code": 0,
+    "directory": "/tmp/fem-electrical-valid-ho1ausnx"
+  },
+  {
+    "case": "no_resistor",
+    "passed": true,
+    "exit_code": 0,
+    "directory": "/tmp/fem-electrical-no_resistor-z8auwkl5"
+  },
+  {
+    "case": "misaligned_switch",
+    "passed": true,
+    "exit_code": 1,
+    "directory": "/tmp/fem-electrical-misaligned_switch-vhr3asgb"
+  },
+  {
+    "case": "missing_off_resistance",
+    "passed": true,
+    "exit_code": 1,
+    "directory": "/tmp/fem-electrical-missing_off_resistance-4yng8l8e"
+  },
+  {
+    "case": "invalid_scale",
+    "passed": true,
+    "exit_code": 1,
+    "directory": "/tmp/fem-electrical-invalid_scale-km9k8zeg"
+  },
+  {
+    "case": "unknown_option",
+    "passed": true,
+    "exit_code": 1,
+    "directory": "/tmp/fem-electrical-unknown_option-azzprrnz"
+  },
+  {
+    "case": "invalid_symmetry",
+    "passed": true,
+    "exit_code": 1,
+    "directory": "/tmp/fem-electrical-invalid_symmetry-6ssg4he2"
+  },
+  {
+    "case": "material_conflict",
+    "passed": true,
+    "exit_code": 1,
+    "directory": "/tmp/fem-electrical-material_conflict-ulwh7etw"
+  }
+]

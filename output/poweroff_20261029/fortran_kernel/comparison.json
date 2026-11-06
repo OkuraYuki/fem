@@ -1,0 +1,11 @@
+{
+  "sample_elements": 64,
+  "entries_compared": 2048,
+  "sigma_matrix_max_abs_diff": 2.8086040437802495e-14,
+  "sigma_matrix_max_diff_normalized_by_max_entry": 2.392435719345492e-11,
+  "epsilon_over_dt_matrix_max_abs_diff": 3.5004638077040795e-13,
+  "epsilon_over_dt_matrix_max_diff_normalized_by_max_entry": 2.3932694206812656e-11,
+  "translated_fortran_vs_cpp_normalized_max_difference": 4.744126351802386e-16,
+  "pass_with_global_coordinates_tolerance_1e_9": true,
+  "pass_with_translated_coordinates_tolerance_1e_12": true
+}

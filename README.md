@@ -1,320 +1,147 @@
 # fem
 
-3次元静電界の有限要素法（FEM）ソルバー。ポアソン方程式（∇·(σ∇φ) = 0）を4節点四面体要素で離散化し、節点電位分布を求める。
+異方性の導電率・誘電率を扱う3次元電場の有限要素法（FEM）ソルバーです。
+4節点四面体要素を使い、定常解析、時間依存解析、パルス電圧、外部回路との結合に対応します。
 
-参考実装：<a href="https://dora.bk.tsukuba.ac.jp/~takeuchi/?サイエンス/２次元電位分布の数値計算#x0404645">筑波大学 竹内研・2次元電位分布の数値計算</a>
+報告書は[報告書一覧](reports/README.md)に、説明付きでまとめています。新しい報告書もここに追加します。
 
----
+## フォルダ構成
 
-## クイックスタート
-
-### ビルド
-
-**Linux / macOS:**
-```bash
-g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem
-```
-
-**Windows (PowerShell / cmd):**
-```powershell
-g++ -O2 main.cpp electrostatic_analyzer.cpp -o fem.exe
-```
-
-### 実行
-
-**Linux / macOS:**
-```bash
-# すべてのモデルを実行
-./fem models.dat
-
-# model_1 のみ実行
-./fem models.dat model_1
-```
-
-**Windows (PowerShell):**
-```powershell
-# すべてのモデルを実行
-.\fem.exe models.dat
-
-# model_1 のみ実行
-.\fem.exe models.dat model_1
-```
-
----
-
-## ディレクトリ構造
-
-```
+```text
 fem/
-  models/
-    model_1/
-      in.dat              ← メッシュデータ
-      sin.dat             ← 材料・境界条件
-      tmate.dat           ← 初期電位
-      sina.dat.t          ← 解析設定（時間ステップ）
-    model_2/
-      in.dat
-      sin.dat
-      tmate.dat
-      sina.dat.t
-    model_3/ ...
-  output/
-    model_1/
-      tempa.dat001~010    ← ステップごとの結果
-      analysis_summary.txt ← 解析レポート
-    model_2/
-      ...
-  models.dat              ← モデル指定リスト
-  main.cpp
-  electrostatic_analyzer.cpp
-  electrostatic_analyzer.h
-  fem.exe
-  batch_summary.csv       ← 全モデルの集約結果（バッチ実行時）
+├── README.md           # 最初に読む案内・実行方法
+├── CMakeLists.txt      # ビルドと回帰テスト
+├── src/                # C++ソース・ヘッダー
+├── config/             # バッチ実行用のモデル一覧
+│   ├── models.dat
+│   └── pulse_models.dat
+├── models/             # 入力データ（モデルごとのフォルダ）
+├── output/             # 計算結果・過去の検証結果
+│   ├── <モデル名>/
+│   └── batch_summary.csv
+├── reports/            # 報告書へのリンク・説明の一覧
+├── docs/               # 入力仕様・理論・検証報告
+├── tools/              # 解析・集計・検証の補助ツール
+├── tests/              # 物理・回路・CLIの回帰テスト
+├── bin/                # ビルドした実行ファイル
+│   └── legacy/         # 整理前の実行ファイルを保存
+└── build/              # CMakeの中間生成物・テスト結果（自動生成）
 ```
 
-### models.dat — モデル指定ファイル
+入力モデル名と既存の計算結果のフォルダ名は維持しています。
+大容量の入力メッシュ（`in.dat`など）や解析の生データは、この更新のコミット対象から除外しています。
+モデルによっては必要な入力がリポジトリにそろっていないため、実行・再検証時は別途保管したデータを元のパスに配置してください。
+報告書・図・集計データは `output/` に含めています。
+詳しい資料は[ドキュメント一覧](docs/README.md)から参照できます。
 
+## ビルド
+
+必要なものはC++17対応コンパイラ（g++ / clang++など）です。
+以下のコマンドはすべて、このREADMEがある**プロジェクトルート**で実行してください。
+CMakeを使う場合はCMake 3.10以上も必要です。
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j 2
 ```
-# Simple model name list
-# Each model should have its data in models/<model_name>/
-model_1
-model_2
-model_3
+
+Linux / macOSでは `bin/fem`、Windowsでは `bin/fem.exe` が生成されます。
+CMakeを使わない場合も直接ビルドできます。
+
+```bash
+# Linux / macOS
+mkdir -p bin
+g++ -O2 -std=c++17 src/main.cpp src/electrostatic_analyzer.cpp -o bin/fem
 ```
 
-- 各行に**モデル名**を記入
-- コメント行は `#` で始まる
-- 空行は無視される
-- 入力ファイル（in.dat, sin.dat, tmate.dat, sina.dat.t）は自動的に `models/<model_name>/` から読み込まれる
-- 出力は自動的に `output/<model_name>/` に書き込まれる
+```powershell
+# Windows / PowerShell（g++を使用）
+New-Item -ItemType Directory -Force bin
+g++ -O2 -std=c++17 src/main.cpp src/electrostatic_analyzer.cpp -o bin/fem.exe
+```
 
----
+`bin/legacy/`は整理前のバイナリの保存先です。現在のソースからビルドしたものを使用してください。
 
-## ファイル構成
+## 実行
 
-| ファイル | 役割 |
+```bash
+# モデルを1つ実行（一覧への登録不要）
+./bin/fem model_1
+
+# config/models.dat に列挙されたモデルを実行
+./bin/fem config/models.dat
+
+# 一覧から1つに絞って実行
+./bin/fem config/models.dat model_10
+
+# パルス比較用のモデル一覧を実行
+./bin/fem config/pulse_models.dat
+
+# 回路結合の例
+./bin/fem model_entyu_open
+./bin/fem model_entyu_fall_sym
+```
+
+Windows PowerShellでは `./bin/fem` を `.\bin\fem.exe` に置き換えます。
+モデル一覧の内容は1行1モデル名で、空行と `#` から始まる行は無視されます。
+一覧の場所に関係なく、入力・出力パスは**カレントディレクトリを基準**に解決されます。
+`bin/`や`docs/`に移動して実行せず、ルートから起動してください。
+
+引数なしの場合は、従来の単一モデル方式でカレントディレクトリの
+`in.dat`などを読み、同じ場所に結果を書きます。通常はモデル名を指定してください。
+
+## 入力と出力
+
+入力は `models/<モデル名>/` にまとめます。
+
+| ファイル | 用途 |
 |---|---|
-| `main.cpp` | エントリーポイント・batch runner |
-| `electrostatic_analyzer.h/.cpp` | FEM解析クラス本体 |
-| `models.dat` | モデル指定リスト（実行するモデルのリスト） |
+| `in.dat` | 必須：メッシュ・要素接続・節点座標 |
+| `sin.dat` | 材料物性・境界条件・電流源 |
+| `tmate.dat` | 材料ごとの固定電位 |
+| `sina.dat.t` | 時間刻み・ステップ数などの解析制御 |
+| `pulse.dat` | 任意：パルス電圧 |
+| `voltage_difference.dat` | 任意：節点間電位差の記録 |
+| `symmetry.dat` | 任意：同一電位の拘束 |
+| `circuit.dat` | 任意：外部回路との結合 |
 
----
+解析制御ファイルには複数の数値形式があるため、
+[入力値リファレンス](docs/input_values_reference.md)の書式を参照してください。
 
-## 入力ファイル
+通常の出力先は `output/<モデル名>/` です。
+`tempa.dat001`以降に節点電位、`analysis_summary.txt`に条件と収束情報を保存します。
+電位差の履歴は解析レポートに記録され、回路結合時は `circuit_history.csv`も生成されます。
+一覧ファイルを指定した実行では、1モデルに絞った場合も
+`output/batch_summary.csv`を更新します。モデル名だけの実行では更新しません。
 
-各モデルのデータは `models/<model_name>/` に配置します。
+同じモデルを再実行すると同名ファイルは上書きされます。
+以前の長い実行で生成された余分なステップファイルは自動削除されないため、
+比較に必要な結果は実行前に別のフォルダへ保存してください。
 
-### `in.dat` — メッシュデータ
+新しいモデルは `models/<新しい名前>/`を作って入力を配置し、
+`./bin/fem <新しい名前>`で実行できます。バッチに含める場合は
+`config/models.dat`などへ名前を追加してください。
 
-```
-<節点数> <要素数> <ダミー1> <ダミー2> <単位スケール>
-<要素定義> ... （4節点の番号を列挙、1-based）
-<節点座標> ... （x y z を列挙）
-```
+## 検証と開発
 
-### `sin.dat` — 材料・境界条件
-
-```
-<ntblk> <ntmblk> <ntmate> <npt2> <nlv>
-[境界条件ブロック: 節点1 節点2 タイプ 値]  ×ntblk
-[材料ブロック: 開始要素 終了要素 材料番号]  ×ntmblk
-[材料物性: σx σy σz εx εy εz ρ Cv]        ×ntmate  （εx εy εz は時間依存用）
-<電流源数>
-[電流源: 要素番号 Ix Iy Iz]                 ×電流源数
-```
-
-- 境界条件タイプ：`1` or `4` = Dirichlet（固定電位）、`5` = Neumann（自然境界）
-- 異方性導電率（σx, σy, σz）・誘電率（εx, εy, εz）に対応
-
-### `tmate.dat` — 初期電位
-
-```
-<エントリ数>
-<材料番号> <電位値>  ×エントリ数
+```bash
+ctest --test-dir build -C Release --output-on-failure
+# CLIの設定検証（Python 3が必要）
+python3 tests/check_electrical_options.py ./bin/fem build/test-output
 ```
 
-指定した材料番号に属する全節点を固定電位として登録する。
+CMakeの回帰テストは `build/test-output/`に結果を保存し、既存のモデル結果は更新しません。
+補助ツールの用途と依存関係は[tools/README.md](tools/README.md)を参照してください。
+VS Codeでは「Build FEM」「Test FEM」「Run model」タスクが利用できます。
 
-### `sina.dat.t` — 解析制御パラメータ
+## 旧構成からの変更
 
-```
-<dt>        # 時間ステップ（> 0: 時間依存、≤ 0: 定常解析）
-<nstep>     # ステップ数
-<t0>        # 初期時間
-```
+- ルートのC++ファイル → `src/`
+- 解説・報告のMarkdown → `docs/`
+- モデル一覧 → `config/`
+- 整理前の `fem` / `fem.exe` → `bin/legacy/`
+- バッチ集約CSV → `output/batch_summary.csv`
+- 実行コマンドは `./fem models.dat` → `./bin/fem config/models.dat`
 
-時間依存解析時の Backward Euler 陰解法パラメータ。
-
----
-
-## 出力ファイル
-
-### `output/<model_name>/tempa.dat001～` — 節点電位分布
-
-```
-<電位値 1> <電位値 2> ... <電位値 N>  （1行に6列の固定小数点形式）
-```
-
-ステップごとに `tempa.dat001`, `tempa.dat002`, ... が生成されます。
-
-### `output/<model_name>/analysis_summary.txt` — 解析レポート
-
-```
-Electrostatic FEM Analysis Summary
-Mesh
-  Nodes / Elements
-Analysis Conditions
-  dt, nstep(max), convergence_tolerance
-  final_step, final_time, final_max_diff, converged_early
-  solver_method, last_solver_iterations, last_solver_time_sec
-Solver Iterations Per Step
-  step, iterations, solve_time_sec
-Boundary Conditions
-  count と各条件の内容
-Fixed Materials (tmate.dat)
-  count と材料番号ごとの固定電位値
-Material Properties
-  各材料の sigma=(σx, σy, σz), epsilon=(εx, εy, εz)
-Material Block Ranges
-  start, end, material_id
-```
-
-- `Nodes` / `Elements`: メッシュの節点数と要素数
-- `dt`: 時間刻み
-- `nstep(max)`: 最大ステップ数
-- `convergence_tolerance`: 外側の早期収束判定に使うしきい値
-- `final_step`: 実際に最後まで進んだステップ番号
-- `final_time`: 最終ステップまで進めた時刻
-- `final_max_diff`: 最終ステップでの最大電位差
-- `converged_early`: `final_max_diff < convergence_tolerance` で途中終了したかどうか
-- `solver_method`: 内側の線形ソルバ方式（ICCG / SSOR-CG）
-- `last_solver_iterations`: 最後のステップでの反復回数
-- `last_solver_time_sec`: 最後のステップの線形ソルバ時間
-- `Solver Iterations Per Step`: 各時間ステップごとの反復回数と計算時間
-- `Boundary Conditions`: `sin.dat` に入っている境界条件の件数と内容
-- `Fixed Materials (tmate.dat)`: 材料番号ごとの固定電位条件
-- `Material Properties`: 材料ごとの導電率と誘電率
-- `Material Block Ranges`: どの要素範囲にどの材料を割り当てたか
-
-### `batch_summary.csv` — バッチ実行結果集約（複数モデル実行時）
-
-```
-model_name,mesh_file,material_file,initial_file,config_file,output_dir,...,final_step,final_time,final_max_diff,converged_early
-model_1,models/model_1/in.dat,...,output/model_1,...,10,0.01,0.000990879,no
-model_2,models/model_2/in.dat,...,output/model_2,...,10,0.01,0.000990879,no
-```
-
-- `model_name`: モデル名
-- `mesh_file` / `material_file` / `initial_file` / `config_file`: 各入力ファイルのパス
-- `output_dir`: そのモデルの出力先ディレクトリ
-- `nodes` / `elements`: メッシュ規模
-- `boundaries` / `fixed_materials` / `materials`: 入力条件の件数
-- `final_step` / `final_time` / `final_max_diff` / `converged_early`: 解析結果の要約
-- すべてのモデル実行結果を1行ずつ記録。解析後の比較・検証に使用。
-
----
-
-## 解析フロー
-
-```
-main()
- ├─ load_model_specs(models.dat)         # モデル指定リスト読み込み
- ├─ for each model:
- │   ├─ ElectrostaticAnalyzer analyzer
- │   ├─ read_mesh(models/<name>/in.dat)
- │   ├─ read_material_and_bc(models/<name>/sin.dat)
- │   ├─ read_initial_potential(models/<name>/tmate.dat)
- │   ├─ read_analysis_config(models/<name>/sina.dat.t)
- │   ├─ solve()
- │   │   ├─ apply_boundary_conditions()
- │   │   ├─ assemble_global_matrix()    # K_sigma + K_epsilon/dt
- │   │   ├─ [time loop] for i=1 to nstep:
- │   │   │   ├─ build_time_step_rhs()  # F + (K_epsilon/dt)·φ^n
- │   │   │   ├─ solve_linear_system()  # CG法で φ^(n+1) を求解
- │   │   │   ├─ write_potential_distribution()
- │   │   │   └─ convergence check
- │   │   └─ write_analysis_report()
- │   └─ append to batch_summary.csv
- └─ output all results
-```
-
----
-
-## クラス仕様
-
-### `ElectrostaticAnalyzer`
-
-| メンバ | 型 | 説明 |
-|---|---|---|
-| `nodes` | `vector<Node>` | 節点座標 (x, y, z) |
-| `elements` | `vector<Element>` | 4節点四面体要素（節点番号4つ + 材料ID） |
-| `materials` | `vector<Material>` | 材料物性（σx, σy, σz, εx, εy, εz） |
-| `boundaries` | `vector<BoundaryCondition>` | 境界条件 |
-| `potentials` | `vector<double>` | 各節点の電位 φ |
-| `fixed_node` | `vector<bool>` | 固定節点フラグ |
-| `fixed_value` | `vector<double>` | 固定節点の電位値 |
-| `global_K` | CSR形式 | 全体剛性行列（異方性対応） |
-| `global_E` | CSR形式 | 全体誘電率行列（時間項用） |
-| `global_F` | `vector<double>` | 荷重ベクトル（電流源） |
-
-### マトリックス記号
-
-- **K_sigma**：導電率行列（σx, σy, σz で異方性）
-- **K_epsilon**：誘電率行列（εx, εy, εz で異方性）
-- **時間依存定式化**：$(K_\sigma + \frac{K_\epsilon}{\Delta t})\phi^{n+1} = F + \frac{K_\epsilon}{\Delta t}\phi^n$
-- **時間積分**：Backward Euler（陰解法）
-
----
-
-## 数値解法
-
-| 項目 | 内容 |
-|---|---|
-| 要素タイプ | 4節点四面体（一次要素） |
-| 積分 | 解析的（体積 = \|detJ\|/6） |
-| 行列形式 | CSR（圧縮スパース行列） |
-| ソルバー | 共役勾配法（CG） |
-| 収束判定 | max差分 < 1e-8 V または nstep に到達 |
-| σ異方性 | σx, σy, σz を個別に使用 |
-| ε異方性 | εx, εy, εz を個別に使用（時間項 K_epsilon に反映） |
-
----
-
-## ビルド・実行（詳細）
-
-クイックスタートを参照してください。コンパイラは g++ の他に clang++ も使用可能です。
-
-**オプション:**
-- `-O2`: 最適化レベル 2（デフォルト推奨）
-- `-O3`: さらに高い最適化（大規模問題用）
-- `-g`: デバッグシンボル付きビルド
-
----
-
-## 新しいモデル追加手順
-
-1. **モデルフォルダ作成**
-   ```bash
-   mkdir models/model_3
-   ```
-
-2. **入力ファイルを配置**
-   ```bash
-   cp models/model_1/in.dat models/model_3/
-   # sin.dat, tmate.dat, sina.dat.t も同様に配置
-   ```
-
-3. **models.dat に追加**
-   ```
-   model_1
-   model_2
-   model_3  ← 新規追加
-   ```
-
-4. **実行**
-   ```bash
-   ./fem.exe models.dat model_3
-   ```
-
----
-- 実装背景: `agents.md`
+過去の `output/`内のレポート・実行記録は当時の記録として保持しています。
+そこに書かれた旧パスのコマンドを再実行する場合は、上の対応に従ってください。

@@ -1,0 +1,3 @@
+# Baseline: 20 ns high, 30 ns low (50 ns period).
+# material_id v_low v_high t_rise t_high t_fall t_low phase
+2 0.0 1.0 0.0 20.0e-9 0.0 30.0e-9 0.0

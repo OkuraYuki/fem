@@ -1,0 +1,9 @@
+{
+  "max_abs_difference_from_production_rounded_snapshot_V": 3.686386420621336e-09,
+  "trace_node884": {
+    "initial_dielectric_V": 0.7458464515663135,
+    "ON24_minus_initial_V": -0.00018223684654705696,
+    "OFF25_V": -0.0001679616678133355
+  },
+  "all_modes_26_steps_and_zero_warnings": true
+}

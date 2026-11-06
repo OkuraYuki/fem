@@ -1,0 +1,1 @@
+/home/ohkura/test_c+/fem/models/model_entyu_3/sina.dat.t

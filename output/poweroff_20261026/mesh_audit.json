@@ -1,0 +1,123 @@
+{
+  "nodes": 363759,
+  "elements": 2095200,
+  "header_unit_unapplied": 1000.0,
+  "coordinates_min": [
+    -2525.0,
+    -2525.0,
+    0.0
+  ],
+  "coordinates_max": [
+    2525.0,
+    2525.0,
+    1500.0
+  ],
+  "connectivity_in_range": true,
+  "coverage_min": 1,
+  "coverage_max": 1,
+  "material_element_counts": {
+    "1": 2700,
+    "2": 1948500,
+    "3": 144000
+  },
+  "positive_finite_materials": true,
+  "conductivity_permittivity": [
+    [
+      58000000.0,
+      58000000.0,
+      58000000.0,
+      8.9e-12,
+      8.9e-12,
+      8.9e-12
+    ],
+    [
+      0.01,
+      0.01,
+      0.008,
+      1e-10,
+      1e-10,
+      1e-10
+    ],
+    [
+      58000000.0,
+      58000000.0,
+      58000000.0,
+      8.9e-12,
+      8.9e-12,
+      8.9e-12
+    ]
+  ],
+  "min_abs_volume": 902.1097956087506,
+  "max_abs_volume": 45073.163458107585,
+  "degenerate_elements": 0,
+  "negative_orientation_elements": 0,
+  "boundary_type_counts": {
+    "4": 160
+  },
+  "pulse_ground_shared_nodes": 0,
+  "pulse_explicit_ground_conflicts": 0,
+  "probe_nodes": [
+    {
+      "node": 181500,
+      "xyz": [
+        100.0,
+        0.0,
+        750.0
+      ],
+      "materials": [
+        2
+      ]
+    },
+    {
+      "node": 181254,
+      "xyz": [
+        500.0,
+        0.0,
+        750.0
+      ],
+      "materials": [
+        2
+      ]
+    },
+    {
+      "node": 180954,
+      "xyz": [
+        1200.0,
+        0.0,
+        750.0
+      ],
+      "materials": [
+        2
+      ]
+    },
+    {
+      "node": 180733,
+      "xyz": [
+        2000.0,
+        0.0,
+        750.0
+      ],
+      "materials": [
+        2
+      ]
+    },
+    {
+      "node": 180684,
+      "xyz": [
+        2400.0,
+        0.0,
+        750.0
+      ],
+      "materials": [
+        2
+      ]
+    }
+  ],
+  "sha256": {
+    "in.dat": "6820e4a2a84455ccbeb21fd7cd2688793b002275221e5506f102a44de7d28a88",
+    "sin.dat": "8142f7d7aa37c5cf06fe0026210784c9a2cb1b4dc713a86fb57e56ecd6a26b6a",
+    "tmate.dat": "d3b818442b529a945c388d5145e962fb1075a2e61f08bb275d71a3697ae0e250",
+    "pulse.dat": "c814a81fa959953b59add88eb894e401d0b4e82671e21f93d1c0813319323380",
+    "sina.dat.t": "f630f87f87953a2143926092a63b609de61f796b91e87aaeb37b99c50bbd3e2a"
+  }
+}

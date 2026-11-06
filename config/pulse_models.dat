@@ -1,0 +1,7 @@
+# Sequential pulse comparison models.
+# Run with: ./bin/fem config/pulse_models.dat
+model_A
+model_B
+model_C
+model_D
+model_E

@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-26",
+  "source_sha256": {
+    "electrostatic_analyzer.cpp": "2430f754c0ea1ab205a0882dff969ddd1b9d3a5a5c147dc660b1250409ebc56b",
+    "electrostatic_analyzer.h": "b739e7606be3600a6436a428a8fcd04c1e27603bcc1cf65670c4622454a17373",
+    "main.cpp": "ed5aa8757bf2e3ef9343261c7af483e0f6bc09ff906df204fc7f325b54de4ecc",
+    "tests/physics_regression.cpp": "46070694ffecf3a8dcb7d62f89a1be4978638e452ac6ac808671ae50aa90d5ad",
+    "tools/poweroff_case.cpp": "e95045ff87180babfc15b74b9d93114430c991f69db9338702437d10f93cdd6e"
+  },
+  "research_runner_build": "g++ -O3 -march=native -std=c++17 tools/poweroff_case.cpp electrostatic_analyzer.cpp -o output/poweroff_20261026/run_case_v2",
+  "installed_build": "g++ -O2 -Wall -Wextra -Wpedantic -std=c++17 main.cpp electrostatic_analyzer.cpp -o fem",
+  "notes": "research runner v2 was built before final node-order restoration after solve; time stepping is identical. Pilot pre-CG-fix outputs are excluded from comparisons.",
+  "research_runner_source_sha256": "61723ccce978c6de81227ccacb6f6f9b0e1167d07b05c702281c7d705f2bd189",
+  "research_runner_binary_sha256": "79adf4693edf7eac749c940cbe37b9adb470f8ee5811636a4f79f2748cd7dc3c",
+  "installed_binary_sha256": "9df47c1631132ab841a10cf5afb4f7002cc5e0c55d0dc79f197efae933cafa01",
+  "analysis_script_sha256": {
+    "tools/poweroff_case.cpp": "e95045ff87180babfc15b74b9d93114430c991f69db9338702437d10f93cdd6e",
+    "tools/audit_poweroff.py": "98ac18fed956234c38970791627effa798ecfe4ed4deda9aceb2de34b7ba6380",
+    "tools/analyze_poweroff.py": "2394aac477462591fae6e0796366b29ddb5e1ccdddab5ec57278fc119292a0e0",
+    "tools/check_poweroff_cli.py": "befe143d79d3d9cb17d2e8f26406c407471b83dc491470539a12416c032dd520",
+    "tools/run_poweroff_suite.py": "3a67d898817c90a9c8e8e036df3fbe1484c4317c2492951f3180acf88614ae57",
+    "tools/locate_poweroff_extrema.py": "b7850e64d954ac6a283ca997e6dbef55e1229a6c4e83a47725702d99b301a1dc",
+    "tools/write_poweroff_report.py": "e3329af4fe54f00095c6887f75c8a9bd590c88ad1bda539777b91274649cbe70"
+  }
+}

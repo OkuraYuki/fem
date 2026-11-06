@@ -1,0 +1,2 @@
+model_name,mesh_file,material_file,initial_file,config_file,output_dir,nodes,elements,boundaries,fixed_materials,materials,final_step,final_time,final_max_diff,converged_early
+model_entyu_1,models/model_entyu_1/in.dat,models/model_entyu_1/sin.dat,models/model_entyu_1/tmate.dat,models/model_entyu_1/sina.dat.t,output/model_entyu_1,363759,2095200,160,1,3,150,1.5e-07,1.71351e-07,no

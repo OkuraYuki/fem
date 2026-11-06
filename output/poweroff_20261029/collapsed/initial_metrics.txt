@@ -1,0 +1,5 @@
+nodes 2409
+Ksigma_phi0_free_max 3.9006762245579008e-10
+Kepsilon_phi0_free_max 3.9015404105600898e-18
+max_difference_from_bottom_layer 0
+max_conductive_dielectric_field_difference 3.4399136317198042e-11

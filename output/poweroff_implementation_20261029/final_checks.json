@@ -1,0 +1,7 @@
+{
+  "report_links_exist": true,
+  "regression_suites_passed": true,
+  "cli_cases_passed": 8,
+  "full_mesh_cases_passed": 3,
+  "binary_matches_current_sources_manifest": true
+}

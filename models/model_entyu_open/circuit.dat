@@ -1,0 +1,10 @@
+# Reference case: ideal source disconnected at 25 ns.
+# No external discharge resistor is assumed. The conducting medium discharges
+# to the grounded outer electrode using its measured/model sigma and epsilon.
+electrode_material 1
+series_resistance_ohm ideal
+disconnect_time_s 25e-9
+off_resistance_ohm open
+external_capacitance_F 0
+coordinate_scale_to_m 0.001
+initial_state steady

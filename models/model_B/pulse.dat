@@ -1,0 +1,3 @@
+# Short pulse: 5 ns high, 45 ns low (50 ns period).
+# material_id v_low v_high t_rise t_high t_fall t_low phase
+2 0.0 1.0 0.0 5.0e-9 0.0 45.0e-9 0.0

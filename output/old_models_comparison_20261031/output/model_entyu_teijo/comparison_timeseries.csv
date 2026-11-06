@@ -1,0 +1,2 @@
+step,time_ns,old_global_min_V,new_global_min_V,max_abs_difference_V,rms_difference_V,old_node181500_V,old_node181254_V,old_node180954_V,old_node180733_V,old_node180684_V,new_node181500_V,new_node181254_V,new_node180954_V,new_node180733_V,new_node180684_V
+1,0,-0.00016927,0.0,0.19365,0.03610386027034583,0.59484,0.28016,0.1171,0.028628,0.0013277,0.74768,0.37317,0.17017,0.051735,0.0095134

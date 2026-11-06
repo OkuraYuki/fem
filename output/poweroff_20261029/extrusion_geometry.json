@@ -1,0 +1,26 @@
+{
+  "projection_distinct_xy_vertices": {
+    "3": 2095200
+  },
+  "interfaces": {
+    "1": {
+      "boundary_faces": 1812,
+      "side_faces": 1800,
+      "side_faces_with_nonzero_z_normal": 0,
+      "max_abs_side_z_normal": 0.0
+    },
+    "3": {
+      "boundary_faces": 96640,
+      "side_faces": 96000,
+      "side_faces_with_nonzero_z_normal": 0,
+      "max_abs_side_z_normal": 0.0
+    }
+  },
+  "step1_z_variation": {
+    "max_range_V": 0.003689999999999971,
+    "cross_section_node_1based": 828,
+    "min_V": 0.74583,
+    "max_V": 0.74952,
+    "range_at_peak_node884_V": 0.003689999999999971
+  }
+}

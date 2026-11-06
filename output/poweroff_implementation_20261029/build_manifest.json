@@ -1,0 +1,9 @@
+{
+  "source_sha256": {
+    "electrostatic_analyzer.cpp": "d39466364f78cce540f9f029b286b0ef3487e41de6de7b82898c1a6de4e76587",
+    "electrostatic_analyzer.h": "04f4871da53860570773c6b3830d73e50e9d751da0f9b2f05c8d6b1126592bed",
+    "main.cpp": "1a1409107da3059500670a9987a1d3a90a40aa9fe7cbc00e492491b116b401bf",
+    "tests/circuit_regression.cpp": "e3b755526e8fc65f43ae8d38b36b09eb3075158336e42fd1a80c7d0f0987e205"
+  },
+  "binary_sha256": "f0f4597f7563820cf475ee2372878569877f9e3e3fa18821a4c9ede96b533147"
+}

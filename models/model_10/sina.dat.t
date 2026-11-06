@@ -1,6 +1,6 @@
    0   0   0   0   0   0   0  = ifvolt,ifadat,ifaeg,ifb0,iefrr,ifmove,ifwoff
-   500   0   0   0   0   0   0  = nstep,nwave,ifconv,iftime,ifcont,ifbdat,ifje
-  0  0.00000E+00   0  = dt(s), time0(s), istep2
+  100   0   0   0   0   0   0  = nstep,nwave,ifconv,iftime,ifcont,ifbdat,ifje
+   0  0.00000E+00   0  = dt(s), time0(s), istep2
  0.00000E+00 0.00000E+00      = freq(Hz), freq-end(Hz)
    0  15   0                  = ifmat, mite, ia18
    0
@@ -8,7 +8,7 @@
  1.00000E+00                  = 加速係数
  1.00000E-08 0.00000E+00      = ddmin(収束判定値), ddmin(閾値)(%)
    4                          = ntnod(測定節点数)
-     748     809     967     924              = 節点番号(6i8)
+  1385    1472   2303   2392              = 節点番号(6i8)
    0                          = nrotmat                 ! 回転材質数
                               = rotmat(1),rotmat(2).... ! 材質番号
  0.00000E+00 2.09440E+00 4.18880E+00 1.00000E+04     = VMIN,VMAX,VMIDOL,VA

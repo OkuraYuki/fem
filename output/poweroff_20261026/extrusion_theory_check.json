@@ -1,0 +1,9 @@
+{
+  "max_xy_difference_between_z_layers": 0.0,
+  "max_z_span_in_layers_per_tetra": 1,
+  "material_node_sets_equal_between_layers": {
+    "1": true,
+    "2": true,
+    "3": true
+  }
+}
